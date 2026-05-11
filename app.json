@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Financial Management",
+    "slug": "financial-management",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#E91E8C"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.student.financialmanagement"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E91E8C"
+      },
+      "package": "com.student.financialmanagement"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    }
+  }
+}
