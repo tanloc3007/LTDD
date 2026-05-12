@@ -7,6 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
 
 // --- Kiểm tra độ mạnh mật khẩu ---
 function getPasswordStrength(pw) {
@@ -29,6 +30,7 @@ function getPasswordStrength(pw) {
 }
 
 export default function RegisterScreen({ navigation }) {
+  const { register } = useAuth();
   const [name,      setName]      = useState('');
   const [email,     setEmail]     = useState('');
   const [phone,     setPhone]     = useState('');
@@ -42,7 +44,7 @@ export default function RegisterScreen({ navigation }) {
   const strength = getPasswordStrength(password);
 
   // --- Validate & đăng ký ---
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!name.trim())                   return Alert.alert('Thiếu thông tin', 'Vui lòng nhập họ và tên.');
     if (!email.trim() || !email.includes('@')) return Alert.alert('Email không hợp lệ', 'Vui lòng nhập đúng định dạng email.');
     if (!phone.trim() || phone.length < 9)    return Alert.alert('SĐT không hợp lệ',  'Vui lòng nhập số điện thoại hợp lệ.');
@@ -50,13 +52,17 @@ export default function RegisterScreen({ navigation }) {
     if (password !== confirm)           return Alert.alert('Không khớp',       'Mật khẩu xác nhận không khớp.');
     if (!agreed)                        return Alert.alert('Điều khoản',       'Vui lòng đồng ý với điều khoản sử dụng.');
 
-    setLoading(true);
-    setTimeout(() => {
+    try {
+      setLoading(true);
+      const user = await register({ name, email, phone, password });
       setLoading(false);
-      Alert.alert('🎉 Thành công!', 'Tài khoản đã được tạo. Hãy đăng nhập!', [
-        { text: 'Đăng nhập', onPress: () => navigation.replace('Login') },
+      Alert.alert('Thanh cong!', 'Tai khoan da duoc luu tren MongoDB Atlas.', [
+        { text: 'OK', onPress: () => navigation.replace('Home', { userName: user.name }) },
       ]);
-    }, 1500);
+    } catch (error) {
+      setLoading(false);
+      Alert.alert('Dang ky that bai', error.message);
+    }
   };
 
   return (

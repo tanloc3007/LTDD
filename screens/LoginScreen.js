@@ -7,15 +7,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginScreen({ navigation }) {
+  const { login } = useAuth();
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
   const [showPw,     setShowPw]     = useState(false);
   const [loading,    setLoading]    = useState(false);
 
   // --- Validate & đăng nhập ---
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Thiếu thông tin', 'Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
@@ -29,12 +31,15 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    setLoading(true);
-    // Giả lập API call
-    setTimeout(() => {
+    try {
+      setLoading(true);
+      const user = await login({ email, password });
       setLoading(false);
-      navigation.replace('Home', { userName: email.split('@')[0] });
-    }, 1500);
+      navigation.replace('Home', { userName: user.name || email.split('@')[0] });
+    } catch (error) {
+      setLoading(false);
+      Alert.alert('Dang nhap that bai', error.message);
+    }
   };
 
   return (
