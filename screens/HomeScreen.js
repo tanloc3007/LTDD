@@ -1,18 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Alert,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS, SIZES, SHADOWS } from '../constants/theme';
 import { formatVnd, getCategory, useFinance } from '../contexts/FinanceContext';
+import { apiRequest } from '../constants/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const QUICK_ACTIONS = [
   { id: '1', label: 'Them', icon: 'add-circle', color: COLORS.primary },
   { id: '2', label: 'Thong ke', icon: 'bar-chart', color: '#8B5CF6' },
   { id: '3', label: 'Ngan sach', icon: 'wallet', color: '#F59E0B' },
-  { id: '4', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
+  { id: '4', label: 'Han muc', icon: 'speedometer', color: '#EF4444' },
+  { id: '5', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
 ];
 
 const NAV_TABS = [
@@ -26,8 +27,34 @@ const NAV_TABS = [
 export default function HomeScreen({ navigation, route }) {
   const userName = route?.params?.userName || 'Luan';
   const { transactions, loading } = useFinance();
+  const { token } = useAuth();
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const [activeTab, setActiveTab] = useState('home');
   const [hideBalance, setHideBalance] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      let mounted = true;
+      apiRequest('/notifications', { headers: authHeaders })
+        .then((res) => {
+          if (mounted) setNotifications(res.notifications || []);
+        })
+        .catch(() => { });
+      return () => { mounted = false; };
+    }, [token])
+  );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    try {
+      await apiRequest('/notifications/read-all', { method: 'POST', headers: authHeaders });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (_) { }
+  };
 
   const summary = useMemo(() => {
     const totalIncome = transactions
@@ -80,6 +107,8 @@ export default function HomeScreen({ navigation, route }) {
       navigation.navigate('Transaction');
     } else if (tabId === 'stats') {
       navigation.navigate('Stats');
+    } else if (tabId === 'wallet') {
+      navigation.navigate('Budget');
     } else if (tabId !== 'home') {
       Alert.alert('Tinh nang', `Man hinh "${NAV_TABS.find((t) => t.id === tabId)?.label}" dang phat trien!`);
     } else {
@@ -92,6 +121,12 @@ export default function HomeScreen({ navigation, route }) {
       navigation.navigate('Transaction');
     } else if (action.id === '2') {
       navigation.navigate('Stats');
+    } else if (action.id === '3') {
+      navigation.navigate('Budget');
+    } else if (action.id === '4') {
+      navigation.navigate('Limit');
+    } else if (action.id === '5') {
+      navigation.navigate('AIChat');
     } else {
       Alert.alert(action.label, 'Tinh nang dang phat trien!');
     }
@@ -110,9 +145,13 @@ export default function HomeScreen({ navigation, route }) {
               <Text style={styles.userName}>{userName.charAt(0).toUpperCase() + userName.slice(1)}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.notifBtn}>
+          <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
             <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
-            <View style={styles.notifDot} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -235,6 +274,60 @@ export default function HomeScreen({ navigation, route }) {
           );
         })}
       </View>
+
+      <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheetLg}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Thông báo</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity onPress={markAllRead}>
+                    <Text style={{ color: COLORS.primary, fontSize: SIZES.sm, fontWeight: FONTS.semiBold }}>
+                      Đọc tất cả
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
+                  <Ionicons name="close" size={22} color={COLORS.dark} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="notifications-off-outline" size={40} color={COLORS.border} />
+                <Text style={styles.emptyText}>Chưa có thông báo nào.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item._id || item.createdAt}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 8 }}
+                renderItem={({ item }) => {
+                  const iconName = item.type === 'income' ? 'arrow-down-circle' : item.type === 'budget_over' ? 'warning' : item.type === 'budget_warning' ? 'flash' : 'receipt';
+                  const iconColor = item.type === 'income' ? COLORS.success : item.type === 'budget_over' ? COLORS.danger : item.type === 'budget_warning' ? COLORS.warning : COLORS.primary;
+                  return (
+                    <View style={[styles.notifItem, !item.read && styles.notifUnread]}>
+                      <View style={[styles.notifIcon, { backgroundColor: `${iconColor}15` }]}>
+                        <Ionicons name={iconName} size={18} color={iconColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.notifMsg}>{item.message}</Text>
+                        <Text style={styles.notifTime}>
+                          {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : ''}
+                        </Text>
+                      </View>
+                      {!item.read && <View style={styles.unreadDot} />}
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -274,12 +367,8 @@ const styles = StyleSheet.create({
   greetText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.regular },
   userName: { fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.bold },
   notifBtn: { position: 'relative', padding: 4 },
-  notifDot: {
-    position: 'absolute', top: 4, right: 4,
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: COLORS.danger,
-    borderWidth: 1.5, borderColor: COLORS.white,
-  },
+  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
   balanceCard: {
     marginHorizontal: 16, marginTop: 16, marginBottom: 8,
     borderRadius: 24, padding: 24,
@@ -341,4 +430,18 @@ const styles = StyleSheet.create({
   navIconActive: { backgroundColor: `${COLORS.primary}15` },
   navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
   navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
+
+  // modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyText: { color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 },
+  notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  notifUnread: { backgroundColor: `${COLORS.primary}05`, borderRadius: 12, paddingHorizontal: 8 },
+  notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
+  notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
 });

@@ -8,9 +8,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
+  FlatList,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   CATEGORIES,
@@ -21,6 +24,8 @@ import {
   useFinance,
 } from '../contexts/FinanceContext';
 import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
+import { apiRequest } from '../constants/api';
 
 const NAV_TABS = [
   { id: 'home', label: 'Trang chu', icon: 'home' },
@@ -32,6 +37,45 @@ const NAV_TABS = [
 
 export default function TransactionScreen({ navigation }) {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useFinance();
+  const { token } = useAuth();
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      let mounted = true;
+      apiRequest('/notifications', { headers: authHeaders })
+        .then((res) => {
+          if (mounted) setNotifications(res.notifications || []);
+        })
+        .catch(() => {});
+      return () => { mounted = false; };
+    }, [token])
+  );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    try {
+      await apiRequest('/notifications/read-all', { method: 'POST', headers: authHeaders });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (_) {}
+  };
+
+  const pushNotif = async (message, type = 'other') => {
+    if (!token) return;
+    try {
+      const res = await apiRequest('/notifications', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ message, type }),
+      });
+      setNotifications((prev) => [res.notification, ...prev]);
+    } catch (_) {}
+  };
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
@@ -80,9 +124,13 @@ export default function TransactionScreen({ navigation }) {
       setSaving(true);
       if (editingId) {
         await updateTransaction(editingId, payload);
+        const catLabel = getCategory(category).label;
+        await pushNotif(`✏️ Đã sửa giao dịch: ${payload.type === 'income' ? 'Thu nhập' : 'Chi tiêu'} ${Number(payload.amount).toLocaleString('vi-VN')}đ - ${catLabel} (${payload.date})`, payload.type);
         Alert.alert('Da cap nhat', 'Giao dich da duoc cap nhat.');
       } else {
         await addTransaction(payload);
+        const catLabel = getCategory(category).label;
+        await pushNotif(`${payload.type === 'income' ? '⬇️ Thu nhập' : '⬆️ Chi tiêu'}: ${Number(payload.amount).toLocaleString('vi-VN')}đ - ${catLabel}${payload.note ? ' (' + payload.note + ')' : ''} vào ${payload.date}`, payload.type);
         Alert.alert('Da luu', 'Giao dich moi da duoc them.');
       }
       resetForm();
@@ -103,7 +151,7 @@ export default function TransactionScreen({ navigation }) {
     setShowDatePicker(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id, note, txType, txCategory) => {
     Alert.alert('Xoa giao dich', 'Ban co chac muon xoa giao dich nay?', [
       { text: 'Huy', style: 'cancel' },
       {
@@ -112,6 +160,8 @@ export default function TransactionScreen({ navigation }) {
         onPress: async () => {
           try {
             await deleteTransaction(id);
+            const catLabel = getCategory(txCategory).label;
+            await pushNotif(`🗑️ Đã xoá giao dịch: ${txType === 'income' ? 'Thu nhập' : 'Chi tiêu'} - ${catLabel}${note ? ' (' + note + ')' : ''}`, txType);
           } catch (error) {
             Alert.alert('Khong the xoa', error.message);
           }
@@ -146,7 +196,14 @@ export default function TransactionScreen({ navigation }) {
           <Ionicons name="close" size={24} color={COLORS.dark} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>{editingId ? 'Sua giao dich' : 'Them giao dich'}</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -234,7 +291,7 @@ export default function TransactionScreen({ navigation }) {
               key={item.id}
               item={item}
               onEdit={() => handleEdit(item)}
-              onDelete={() => handleDelete(item.id)}
+              onDelete={() => handleDelete(item.id, item.note, item.type, item.category)}
             />
           ))}
         </View>
@@ -254,6 +311,60 @@ export default function TransactionScreen({ navigation }) {
       </View>
 
       <BottomNav activeTab="history" onPress={handleNav} />
+
+      <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheetLg}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Thông báo</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity onPress={markAllRead}>
+                    <Text style={{ color: COLORS.primary, fontSize: SIZES.sm, fontWeight: FONTS.semiBold }}>
+                      Đọc tất cả
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
+                  <Ionicons name="close" size={22} color={COLORS.dark} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="notifications-off-outline" size={40} color={COLORS.border} />
+                <Text style={styles.emptyText}>Chưa có thông báo nào.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item._id || item.createdAt}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 8 }}
+                renderItem={({ item }) => {
+                  const iconName = item.type === 'income' ? 'arrow-down-circle' : item.type === 'budget_over' ? 'warning' : item.type === 'budget_warning' ? 'flash' : 'receipt';
+                  const iconColor = item.type === 'income' ? COLORS.success : item.type === 'budget_over' ? COLORS.danger : item.type === 'budget_warning' ? COLORS.warning : COLORS.primary;
+                  return (
+                    <View style={[styles.notifItem, !item.read && styles.notifUnread]}>
+                      <View style={[styles.notifIcon, { backgroundColor: `${iconColor}15` }]}>
+                        <Ionicons name={iconName} size={18} color={iconColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.notifMsg}>{item.message}</Text>
+                        <Text style={styles.notifTime}>
+                          {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : ''}
+                        </Text>
+                      </View>
+                      {!item.read && <View style={styles.unreadDot} />}
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -334,6 +445,9 @@ const styles = StyleSheet.create({
   },
   closeBtn: { width: 40, height: 40, justifyContent: 'center' },
   topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
   scroll: { padding: 14, paddingBottom: 152 },
   segment: {
     flexDirection: 'row',
@@ -435,4 +549,18 @@ const styles = StyleSheet.create({
   navItem: { flex: 1, alignItems: 'center', gap: 2 },
   navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
   navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
+
+  // modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyText: { color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 },
+  notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  notifUnread: { backgroundColor: `${COLORS.primary}05`, borderRadius: 12, paddingHorizontal: 8 },
+  notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
+  notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
 });

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: __dirname + '/.env' });
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,8 +36,43 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const budgetCategorySchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    categoryId: { type: String, required: true },
+    label: { type: String, required: true },
+    icon: { type: String, default: 'wallet' },
+    color: { type: String, default: '#E91E8C' },
+    budgetAmount: { type: Number, required: true, min: 0 },
+    month: { type: String, required: true }, // format: "MM/YYYY"
+  },
+  { timestamps: true }
+);
+
+const notificationSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    message: { type: String, required: true },
+    type: { type: String, enum: ['expense', 'income', 'budget_warning', 'budget_over', 'other'], default: 'other' },
+    read: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+const globalLimitSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    limitAmount: { type: Number, required: true, min: 0 },
+    month: { type: String, required: true }, // format: "MM/YYYY"
+  },
+  { timestamps: true }
+);
+
 const User = mongoose.model('User', userSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
+const BudgetCategory = mongoose.model('BudgetCategory', budgetCategorySchema);
+const Notification = mongoose.model('Notification', notificationSchema);
+const GlobalLimit = mongoose.model('GlobalLimit', globalLimitSchema);
 
 function createToken(user) {
   return jwt.sign({ userId: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
@@ -152,6 +188,53 @@ app.post('/transactions', authRequired, async (req, res) => {
       date,
     });
 
+    // Check budget
+    if (type === 'expense') {
+      const parts = String(date).split('/');
+      let monthKey = '';
+      if (parts.length >= 3) {
+        monthKey = `${parts[1].padStart(2, '0')}/${parts[2]}`;
+      } else {
+        const now = new Date();
+        monthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      }
+
+      const budget = await BudgetCategory.findOne({ userId: req.user._id, categoryId: category, month: monthKey });
+      if (budget) {
+        const txs = await Transaction.find({ userId: req.user._id, type: 'expense', category });
+        const total = txs.filter(t => {
+          const tParts = String(t.date).split('/');
+          const tMonthKey = tParts.length >= 3 ? `${tParts[1].padStart(2, '0')}/${tParts[2]}` : monthKey;
+          return tMonthKey === monthKey;
+        }).reduce((s, t) => s + t.amount, 0);
+
+        if (total > budget.budgetAmount) {
+          await Notification.create({ userId: req.user._id, message: `⚠️ Vượt ngân sách danh mục "${budget.label}" ${Number(total - budget.budgetAmount).toLocaleString('vi-VN')}đ!`, type: 'budget_over' });
+        } else if (total / budget.budgetAmount >= 0.8) {
+          await Notification.create({ userId: req.user._id, message: `⚡ Đã dùng ${Math.round(total/budget.budgetAmount*100)}% ngân sách "${budget.label}"`, type: 'budget_warning' });
+        }
+      }
+
+      // Check global limit
+      const globalLimit = await GlobalLimit.findOne({ userId: req.user._id, month: monthKey });
+      if (globalLimit) {
+        const allTxs = await Transaction.find({ userId: req.user._id, type: 'expense' });
+        const allTotal = allTxs.filter(t => {
+          const tParts = String(t.date).split('/');
+          const tMonthKey = tParts.length >= 3 ? `${tParts[1].padStart(2, '0')}/${tParts[2]}` : monthKey;
+          return tMonthKey === monthKey;
+        }).reduce((s, t) => s + t.amount, 0);
+
+        if (allTotal > globalLimit.limitAmount * 1.2) {
+          await Notification.create({ userId: req.user._id, message: `🚨 CẢNH BÁO ĐỎ: Tổng chi tiêu đã vượt quá 120% hạn mức tháng! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+        } else if (allTotal > globalLimit.limitAmount) {
+          await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng này! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+        } else if (allTotal / globalLimit.limitAmount >= 0.8) {
+          await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu đã đạt ${Math.round(allTotal/globalLimit.limitAmount*100)}% hạn mức tháng`, type: 'budget_warning' });
+        }
+      }
+    }
+
     res.status(201).json({ transaction: mapTransaction(transaction) });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lưu giao dịch.' });
@@ -178,6 +261,154 @@ app.delete('/transactions/:id', authRequired, async (req, res) => {
   if (!transaction) return res.status(404).json({ message: 'Không tìm thấy giao dịch.' });
   res.json({ ok: true });
 });
+
+// ---- GLOBAL LIMITS ----
+app.get('/limits', authRequired, async (req, res) => {
+  const { month } = req.query; // "MM/YYYY"
+  const filter = { userId: req.user._id };
+  if (month) filter.month = month;
+  const limit = await GlobalLimit.findOne(filter).sort({ createdAt: -1 });
+  res.json({ limit });
+});
+
+app.post('/limits', authRequired, async (req, res) => {
+  try {
+    const { limitAmount, month } = req.body;
+    if (!limitAmount || !month) {
+      return res.status(400).json({ message: 'Thiếu thông tin hạn mức.' });
+    }
+    const limit = await GlobalLimit.findOneAndUpdate(
+      { userId: req.user._id, month },
+      { limitAmount },
+      { new: true, upsert: true }
+    );
+    
+    // Check if total expense exceeds this new limit
+    const allTxs = await Transaction.find({ userId: req.user._id, type: 'expense' });
+    const allTotal = allTxs.filter(t => {
+      const tParts = String(t.date).split('/');
+      const tMonthKey = tParts.length >= 3 ? `${tParts[1].padStart(2, '0')}/${tParts[2]}` : month;
+      return tMonthKey === month;
+    }).reduce((s, t) => s + t.amount, 0);
+
+    if (allTotal > limit.limitAmount * 1.2) {
+      await Notification.create({ userId: req.user._id, message: `🚨 CẢNH BÁO ĐỎ: Tổng chi tiêu đã vượt quá 120% hạn mức tháng vừa thiết lập! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+    } else if (allTotal > limit.limitAmount) {
+      await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng vừa thiết lập! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+    } else if (allTotal / limit.limitAmount >= 0.8) {
+      await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu hiện tại đã đạt ${Math.round(allTotal/limit.limitAmount*100)}% hạn mức tháng vừa thiết lập`, type: 'budget_warning' });
+    }
+
+    res.status(200).json({ limit });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể tạo hạn mức.' });
+  }
+});
+
+// ---- BUDGET CATEGORIES ----
+app.get('/budgets', authRequired, async (req, res) => {
+  const { month } = req.query; // "MM/YYYY"
+  const filter = { userId: req.user._id };
+  if (month) filter.month = month;
+  const budgets = await BudgetCategory.find(filter).sort({ createdAt: 1 });
+  res.json({ budgets });
+});
+
+app.post('/budgets', authRequired, async (req, res) => {
+  try {
+    const { categoryId, label, icon, color, budgetAmount, month } = req.body;
+    if (!categoryId || !label || !budgetAmount || !month) {
+      return res.status(400).json({ message: 'Thiếu thông tin ngân sách.' });
+    }
+    const exists = await BudgetCategory.findOne({ userId: req.user._id, categoryId, month });
+    if (exists) {
+      return res.status(409).json({ message: 'Danh mục này đã có ngân sách trong tháng.' });
+    }
+    const budget = await BudgetCategory.create({ userId: req.user._id, categoryId, label, icon, color, budgetAmount, month });
+    res.status(201).json({ budget });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể tạo ngân sách.' });
+  }
+});
+
+app.put('/budgets/:id', authRequired, async (req, res) => {
+  try {
+    const budget = await BudgetCategory.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách.' });
+    res.json({ budget });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể cập nhật ngân sách.' });
+  }
+});
+
+app.delete('/budgets/:id', authRequired, async (req, res) => {
+  const budget = await BudgetCategory.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+  if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách.' });
+  res.json({ ok: true });
+});
+
+// ---- NOTIFICATIONS ----
+app.get('/notifications', authRequired, async (req, res) => {
+  const notifications = await Notification.find({ userId: req.user._id }).sort({ createdAt: -1 });
+  res.json({ notifications });
+});
+
+app.post('/notifications', authRequired, async (req, res) => {
+  const { message, type } = req.body;
+  const notification = await Notification.create({ userId: req.user._id, message, type });
+  res.status(201).json({ notification });
+});
+
+app.post('/notifications/read-all', authRequired, async (req, res) => {
+  await Notification.updateMany({ userId: req.user._id, read: false }, { read: true });
+  res.json({ ok: true });
+});
+
+// ---- AI CHAT ----
+app.post('/ai-chat', authRequired, async (req, res) => {
+  try {
+    const { input, contextData } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GEMINI_API_KEY chưa được thiết lập trên server.' });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const promptContext = `
+      Bạn là một trợ lý tài chính thông minh của ứng dụng MoMo Finance.
+      Người dùng tên là ${req.user.name}.
+      Dữ liệu tài chính hiện tại của người dùng:
+      - Tổng giao dịch: ${contextData.totalTransactions}
+      - Tổng chi tiêu tháng này: ${contextData.totalExpense}
+      - Tổng thu nhập tháng này: ${contextData.totalIncome}
+      - Các ngân sách đang có: ${contextData.budgetsInfo}
+      
+      Hãy trả lời bằng tiếng Việt, thân thiện, ngắn gọn và đưa ra các lời khuyên thực tế.
+    `;
+
+    const result = await model.generateContent(promptContext + "\n\nUser: " + input);
+    const responseText = result.response.text();
+
+    res.json({ text: responseText });
+  } catch (error) {
+    console.error('AI Chat Error:', error);
+    res.status(500).json({ message: 'Có lỗi xảy ra khi kết nối với AI.' });
+  }
+});
+
+app.delete('/notifications/:id', authRequired, async (req, res) => {
+  await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+  res.json({ ok: true });
+});
+
+// Hook: auto-create notification when transaction added is merged into POST /transactions
 
 async function start() {
   if (!MONGODB_URI) {

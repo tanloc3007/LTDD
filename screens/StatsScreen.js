@@ -8,12 +8,17 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import { CATEGORIES, formatVnd, parseTransactionDate, useFinance } from '../contexts/FinanceContext';
 import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { apiRequest } from '../constants/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const screenWidth = Dimensions.get('window').width;
 const chartWidth = Math.min(screenWidth - 48, 340);
@@ -46,8 +51,34 @@ const GROUP_CATEGORY_OPTIONS = [
 
 export default function StatsScreen({ navigation }) {
   const { transactions } = useFinance();
+  const { token } = useAuth();
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const [mainTab, setMainTab] = useState('personal');
   const [period, setPeriod] = useState('month');
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!token) return;
+      let mounted = true;
+      apiRequest('/notifications', { headers: authHeaders })
+        .then((res) => {
+          if (mounted) setNotifications(res.notifications || []);
+        })
+        .catch(() => {});
+      return () => { mounted = false; };
+    }, [token])
+  );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    try {
+      await apiRequest('/notifications/read-all', { method: 'POST', headers: authHeaders });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (_) {}
+  };
   const [groupTotalAmount, setGroupTotalAmount] = useState(2220000);
   const [groupTotalInput, setGroupTotalInput] = useState('2220000');
   const [editingGroupTotal, setEditingGroupTotal] = useState(false);
@@ -204,8 +235,13 @@ export default function StatsScreen({ navigation }) {
           <Ionicons name="person" size={18} color={COLORS.primary} />
         </View>
         <Text style={styles.brand}>MoMo Finance</Text>
-        <TouchableOpacity style={styles.bell}>
+        <TouchableOpacity style={styles.bell} onPress={() => setShowNotifModal(true)}>
           <Ionicons name="notifications-outline" size={20} color={COLORS.primaryDark} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -256,6 +292,60 @@ export default function StatsScreen({ navigation }) {
       )}
 
       <BottomNav activeTab="stats" onPress={handleNav} />
+
+      <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheetLg}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Thông báo</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity onPress={markAllRead}>
+                    <Text style={{ color: COLORS.primary, fontSize: SIZES.sm, fontWeight: FONTS.semiBold }}>
+                      Đọc tất cả
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
+                  <Ionicons name="close" size={22} color={COLORS.dark} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Ionicons name="notifications-off-outline" size={40} color={COLORS.border} />
+                <Text style={styles.emptyText}>Chưa có thông báo nào.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item._id || item.createdAt}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 8 }}
+                renderItem={({ item }) => {
+                  const iconName = item.type === 'income' ? 'arrow-down-circle' : item.type === 'budget_over' ? 'warning' : item.type === 'budget_warning' ? 'flash' : 'receipt';
+                  const iconColor = item.type === 'income' ? COLORS.success : item.type === 'budget_over' ? COLORS.danger : item.type === 'budget_warning' ? COLORS.warning : COLORS.primary;
+                  return (
+                    <View style={[styles.notifItem, !item.read && styles.notifUnread]}>
+                      <View style={[styles.notifIcon, { backgroundColor: `${iconColor}15` }]}>
+                        <Ionicons name={iconName} size={18} color={iconColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.notifMsg}>{item.message}</Text>
+                        <Text style={styles.notifTime}>
+                          {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : ''}
+                        </Text>
+                      </View>
+                      {!item.read && <View style={styles.unreadDot} />}
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -725,7 +815,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   brand: { fontSize: SIZES.sm, fontWeight: FONTS.extraBold, color: COLORS.primaryDark },
-  bell: { padding: 4 },
+  bell: { position: 'relative', padding: 4 },
+  badge: { position: 'absolute', top: 0, right: 0, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  badgeText: { color: COLORS.white, fontSize: 8, fontWeight: FONTS.bold },
   topTabs: { height: 42, backgroundColor: COLORS.white, flexDirection: 'row' },
   topTab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topTabText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.medium },
@@ -923,4 +1015,18 @@ const styles = StyleSheet.create({
   navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
   navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
   emptyState: { padding: 16, textAlign: 'center', color: COLORS.gray, fontSize: SIZES.sm },
+
+  // modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyText: { color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 },
+  notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  notifUnread: { backgroundColor: `${COLORS.primary}05`, borderRadius: 12, paddingHorizontal: 8 },
+  notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
+  notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
 });
