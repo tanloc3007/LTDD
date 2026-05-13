@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: __dirname + '/.env' });
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -372,34 +371,57 @@ app.post('/notifications/read-all', authRequired, async (req, res) => {
 app.post('/ai-chat', authRequired, async (req, res) => {
   try {
     const { input, contextData } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 
     if (!apiKey) {
-      return res.status(500).json({ message: 'GEMINI_API_KEY chưa được thiết lập trên server.' });
+      return res.status(500).json({ message: 'GROQ_API_KEY chua duoc thiet lap tren server.' });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const promptContext = `
-      Bạn là một trợ lý tài chính thông minh của ứng dụng MoMo Finance.
-      Người dùng tên là ${req.user.name}.
-      Dữ liệu tài chính hiện tại của người dùng:
-      - Tổng giao dịch: ${contextData.totalTransactions}
-      - Tổng chi tiêu tháng này: ${contextData.totalExpense}
-      - Tổng thu nhập tháng này: ${contextData.totalIncome}
-      - Các ngân sách đang có: ${contextData.budgetsInfo}
+      Ban la mot tro ly tai chinh thong minh cua ung dung MoMo Finance.
+      Nguoi dung ten la ${req.user.name}.
+      Du lieu tai chinh hien tai cua nguoi dung:
+      - Tong giao dich: ${contextData?.totalTransactions || 0}
+      - Tong chi tieu thang nay: ${contextData?.totalExpense || '0 VND'}
+      - Tong thu nhap thang nay: ${contextData?.totalIncome || '0 VND'}
+      - Cac ngan sach dang co: ${contextData?.budgetsInfo || 'Chua thiet lap ngan sach'}
       
-      Hãy trả lời bằng tiếng Việt, thân thiện, ngắn gọn và đưa ra các lời khuyên thực tế.
+      Hay tra loi bang tieng Viet, than thien, ngan gon va dua ra cac loi khuyen thuc te.
     `;
 
-    const result = await model.generateContent(promptContext + "\n\nUser: " + input);
-    const responseText = result.response.text();
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        instructions: promptContext,
+        input: String(input || '').trim(),
+        max_output_tokens: 500,
+      }),
+    });
 
-    res.json({ text: responseText });
+    const data = await groqResponse.json().catch(() => ({}));
+    if (!groqResponse.ok) {
+      console.error('Groq API Error:', data);
+      return res.status(500).json({ message: data?.error?.message || 'Khong the ket noi Groq.' });
+    }
+
+    const responseText =
+      data.output_text ||
+      data.output
+        ?.flatMap(item => item.content || [])
+        ?.map(content => content.text || '')
+        ?.join('')
+        ?.trim();
+
+    res.json({ text: responseText || 'Xin loi, toi chua co cau tra loi phu hop luc nay.' });
   } catch (error) {
     console.error('AI Chat Error:', error);
-    res.status(500).json({ message: 'Có lỗi xảy ra khi kết nối với AI.' });
+    res.status(500).json({ message: 'Co loi xay ra khi ket noi voi AI.' });
   }
 });
 
