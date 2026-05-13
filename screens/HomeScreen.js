@@ -3,18 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, Fla
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, SIZES, SHADOWS } from '../constants/theme';
-import { formatVnd, getCategory, useFinance } from '../contexts/FinanceContext';
+import { FONTS, SIZES, SHADOWS } from '../constants/theme';
+import { getCategory, useFinance } from '../contexts/FinanceContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
-
-const QUICK_ACTIONS = [
-  { id: '1', label: 'Them', icon: 'add-circle', color: COLORS.primary },
-  { id: '2', label: 'Thong ke', icon: 'bar-chart', color: '#8B5CF6' },
-  { id: '3', label: 'Ngan sach', icon: 'wallet', color: '#F59E0B' },
-  { id: '4', label: 'Han muc', icon: 'speedometer', color: '#EF4444' },
-  { id: '5', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
-];
 
 const NAV_TABS = [
   { id: 'home', label: 'Trang chu', icon: 'home' },
@@ -28,6 +21,17 @@ export default function HomeScreen({ navigation, route }) {
   const userName = route?.params?.userName || 'Luan';
   const { transactions, loading } = useFinance();
   const { token } = useAuth();
+  const { colors: COLORS, formatCurrency } = useSettings();
+  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
+
+  const QUICK_ACTIONS = [
+    { id: '1', label: 'Them', icon: 'add-circle', color: COLORS.primary },
+    { id: '2', label: 'Thong ke', icon: 'bar-chart', color: '#8B5CF6' },
+    { id: '3', label: 'Ngan sach', icon: 'wallet', color: '#F59E0B' },
+    { id: '4', label: 'Han muc', icon: 'speedometer', color: '#EF4444' },
+    { id: '5', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
+  ];
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const [activeTab, setActiveTab] = useState('home');
   const [hideBalance, setHideBalance] = useState(false);
@@ -109,6 +113,8 @@ export default function HomeScreen({ navigation, route }) {
       navigation.navigate('Stats');
     } else if (tabId === 'wallet') {
       navigation.navigate('Budget');
+    } else if (tabId === 'profile') {
+      navigation.navigate('Profile');
     } else if (tabId !== 'home') {
       Alert.alert('Tinh nang', `Man hinh "${NAV_TABS.find((t) => t.id === tabId)?.label}" dang phat trien!`);
     } else {
@@ -138,7 +144,7 @@ export default function HomeScreen({ navigation, route }) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.avatarBox}>
-              <Ionicons name="person" size={20} color={COLORS.white} />
+              <Ionicons name="person" size={20} color="#FFFFFF" />
             </View>
             <View>
               <Text style={styles.greetText}>Xin chao,</Text>
@@ -168,7 +174,7 @@ export default function HomeScreen({ navigation, route }) {
           </View>
 
           <Text style={styles.balanceAmount}>
-            {hideBalance ? '........' : formatVnd(summary.totalBalance)}
+            {hideBalance ? '........' : formatCurrency(summary.totalBalance)}
           </Text>
 
           <View style={styles.balanceStats}>
@@ -177,7 +183,7 @@ export default function HomeScreen({ navigation, route }) {
               <View>
                 <Text style={styles.statLabel}>Thu nhap</Text>
                 <Text style={[styles.statAmount, { color: '#A7F3D0' }]}>
-                  +{formatVnd(summary.totalIncome)}
+                  +{formatCurrency(summary.totalIncome)}
                 </Text>
               </View>
             </View>
@@ -187,7 +193,7 @@ export default function HomeScreen({ navigation, route }) {
               <View>
                 <Text style={styles.statLabel}>Chi tieu</Text>
                 <Text style={[styles.statAmount, { color: '#FCA5A5' }]}>
-                  -{formatVnd(summary.totalExpense)}
+                  -{formatCurrency(summary.totalExpense)}
                 </Text>
               </View>
             </View>
@@ -239,7 +245,7 @@ export default function HomeScreen({ navigation, route }) {
               <Text style={styles.emptyState}>Dang tai du lieu...</Text>
             ) : recentTransactions.length ? (
               recentTransactions.map((item) => (
-                <TransactionItem key={item.id} item={item} />
+                <TransactionItem key={item.id} item={item} COLORS={COLORS} formatCurrency={formatCurrency} styles={styles} />
               ))
             ) : (
               <Text style={styles.emptyState}>Chua co giao dich nao.</Text>
@@ -332,7 +338,7 @@ export default function HomeScreen({ navigation, route }) {
   );
 }
 
-function TransactionItem({ item }) {
+function TransactionItem({ item, COLORS, formatCurrency, styles }) {
   const isPositive = item.signedAmount > 0;
   return (
     <View style={styles.txItem}>
@@ -344,13 +350,13 @@ function TransactionItem({ item }) {
         <Text style={styles.txSub}>{item.subtitle}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isPositive ? COLORS.success : COLORS.danger }]}>
-        {isPositive ? '+' : ''}{formatVnd(item.signedAmount)}
+        {isPositive ? '+' : ''}{formatCurrency(item.signedAmount)}
       </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flexGrow: 1, paddingBottom: 8 },
   header: {
@@ -368,7 +374,7 @@ const styles = StyleSheet.create({
   userName: { fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.bold },
   notifBtn: { position: 'relative', padding: 4 },
   badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
+  badgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: FONTS.bold },
   balanceCard: {
     marginHorizontal: 16, marginTop: 16, marginBottom: 8,
     borderRadius: 24, padding: 24,
@@ -377,7 +383,7 @@ const styles = StyleSheet.create({
   },
   balanceTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   balanceLabel: { fontSize: SIZES.sm, color: 'rgba(255,255,255,0.8)', fontWeight: FONTS.medium },
-  balanceAmount: { fontSize: 32, fontWeight: FONTS.extraBold, color: COLORS.white, marginBottom: 20 },
+  balanceAmount: { fontSize: 32, fontWeight: FONTS.extraBold, color: '#FFFFFF', marginBottom: 20 },
   balanceStats: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   statDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 12 },
@@ -430,7 +436,7 @@ const styles = StyleSheet.create({
   navIconActive: { backgroundColor: `${COLORS.primary}15` },
   navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
   navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
-
+  
   // modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },

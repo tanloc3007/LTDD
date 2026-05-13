@@ -18,13 +18,13 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   CATEGORIES,
   INCOME_CATEGORIES,
-  formatVnd,
   getCategory,
   parseTransactionDate,
   useFinance,
 } from '../contexts/FinanceContext';
-import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { apiRequest } from '../constants/api';
 
 const NAV_TABS = [
@@ -38,6 +38,9 @@ const NAV_TABS = [
 export default function TransactionScreen({ navigation }) {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useFinance();
   const { token } = useAuth();
+  const { colors: COLORS, formatCurrency } = useSettings();
+  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [notifications, setNotifications] = useState([]);
@@ -174,6 +177,8 @@ export default function TransactionScreen({ navigation }) {
     if (tabId === 'home') navigation.navigate('Home');
     else if (tabId === 'stats') navigation.navigate('Stats');
     else if (tabId === 'history') navigation.navigate('Transaction');
+    else if (tabId === 'wallet') navigation.navigate('Budget');
+    else if (tabId === 'profile') navigation.navigate('Profile');
     else Alert.alert('Tinh nang', 'Man hinh dang phat trien!');
   };
 
@@ -242,7 +247,7 @@ export default function TransactionScreen({ navigation }) {
             return (
               <TouchableOpacity key={item.id} style={styles.categoryItem} onPress={() => setCategory(item.id)}>
                 <View style={[styles.categoryIcon, active && { backgroundColor: item.color }]}>
-                  <Ionicons name={item.icon} size={22} color={active ? COLORS.white : item.color} />
+                  <Ionicons name={item.icon} size={22} color={active ? '#FFF' : item.color} />
                 </View>
                 <Text style={styles.categoryLabel}>{item.label}</Text>
               </TouchableOpacity>
@@ -290,6 +295,9 @@ export default function TransactionScreen({ navigation }) {
             <TransactionRow
               key={item.id}
               item={item}
+              COLORS={COLORS}
+              styles={styles}
+              formatCurrency={formatCurrency}
               onEdit={() => handleEdit(item)}
               onDelete={() => handleDelete(item.id, item.note, item.type, item.category)}
             />
@@ -310,7 +318,21 @@ export default function TransactionScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <BottomNav activeTab="history" onPress={handleNav} />
+      <View style={styles.bottomNav}>
+        {NAV_TABS.map((tab) => {
+          const active = 'history' === tab.id;
+          return (
+            <TouchableOpacity key={tab.id} style={styles.navItem} onPress={() => handleNav(tab.id)}>
+              <Ionicons
+                name={active ? tab.icon : `${tab.icon}-outline`}
+                size={20}
+                color={active ? COLORS.primary : COLORS.gray}
+              />
+              <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>
@@ -369,7 +391,7 @@ export default function TransactionScreen({ navigation }) {
   );
 }
 
-function TransactionRow({ item, onEdit, onDelete }) {
+function TransactionRow({ item, onEdit, onDelete, COLORS, styles, formatCurrency }) {
   const category = getCategory(item.category);
   const isIncome = item.type === 'income';
   return (
@@ -382,7 +404,7 @@ function TransactionRow({ item, onEdit, onDelete }) {
         <Text style={styles.txMeta}>{category.label} · {item.date}</Text>
       </View>
       <Text style={[styles.txAmount, { color: isIncome ? COLORS.success : COLORS.danger }]}>
-        {isIncome ? '+' : '-'}{formatVnd(item.amount)}
+        {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
       </Text>
       <TouchableOpacity style={styles.iconBtn} onPress={onEdit}>
         <Ionicons name="create-outline" size={18} color={COLORS.primary} />
@@ -390,26 +412,6 @@ function TransactionRow({ item, onEdit, onDelete }) {
       <TouchableOpacity style={styles.iconBtn} onPress={onDelete}>
         <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
       </TouchableOpacity>
-    </View>
-  );
-}
-
-function BottomNav({ activeTab, onPress }) {
-  return (
-    <View style={styles.bottomNav}>
-      {NAV_TABS.map((tab) => {
-        const active = activeTab === tab.id;
-        return (
-          <TouchableOpacity key={tab.id} style={styles.navItem} onPress={() => onPress(tab.id)}>
-            <Ionicons
-              name={active ? tab.icon : `${tab.icon}-outline`}
-              size={20}
-              color={active ? COLORS.primary : COLORS.gray}
-            />
-            <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
     </View>
   );
 }
@@ -431,7 +433,7 @@ function formatDateForDisplay(date) {
   return `${isToday ? 'Hom nay, ' : ''}${formatDateForStorage(date)}`;
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: {
     height: 56,
@@ -447,7 +449,7 @@ const styles = StyleSheet.create({
   topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
   notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
   scroll: { padding: 14, paddingBottom: 152 },
   segment: {
     flexDirection: 'row',
@@ -533,7 +535,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...SHADOWS.lg,
   },
-  saveText: { color: COLORS.white, fontSize: SIZES.base, fontWeight: FONTS.bold },
+  saveText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
   bottomNav: {
     position: 'absolute',
     left: 0,

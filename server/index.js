@@ -210,7 +210,7 @@ app.post('/transactions', authRequired, async (req, res) => {
         if (total > budget.budgetAmount) {
           await Notification.create({ userId: req.user._id, message: `⚠️ Vượt ngân sách danh mục "${budget.label}" ${Number(total - budget.budgetAmount).toLocaleString('vi-VN')}đ!`, type: 'budget_over' });
         } else if (total / budget.budgetAmount >= 0.8) {
-          await Notification.create({ userId: req.user._id, message: `⚡ Đã dùng ${Math.round(total/budget.budgetAmount*100)}% ngân sách "${budget.label}"`, type: 'budget_warning' });
+          await Notification.create({ userId: req.user._id, message: `⚡ Đã dùng ${Math.round(total / budget.budgetAmount * 100)}% ngân sách "${budget.label}"`, type: 'budget_warning' });
         }
       }
 
@@ -229,7 +229,7 @@ app.post('/transactions', authRequired, async (req, res) => {
         } else if (allTotal > globalLimit.limitAmount) {
           await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng này! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
         } else if (allTotal / globalLimit.limitAmount >= 0.8) {
-          await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu đã đạt ${Math.round(allTotal/globalLimit.limitAmount*100)}% hạn mức tháng`, type: 'budget_warning' });
+          await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu đã đạt ${Math.round(allTotal / globalLimit.limitAmount * 100)}% hạn mức tháng`, type: 'budget_warning' });
         }
       }
     }
@@ -281,7 +281,7 @@ app.post('/limits', authRequired, async (req, res) => {
       { limitAmount },
       { new: true, upsert: true }
     );
-    
+
     // Check if total expense exceeds this new limit
     const allTxs = await Transaction.find({ userId: req.user._id, type: 'expense' });
     const allTotal = allTxs.filter(t => {
@@ -295,7 +295,7 @@ app.post('/limits', authRequired, async (req, res) => {
     } else if (allTotal > limit.limitAmount) {
       await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng vừa thiết lập! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
     } else if (allTotal / limit.limitAmount >= 0.8) {
-      await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu hiện tại đã đạt ${Math.round(allTotal/limit.limitAmount*100)}% hạn mức tháng vừa thiết lập`, type: 'budget_warning' });
+      await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu hiện tại đã đạt ${Math.round(allTotal / limit.limitAmount * 100)}% hạn mức tháng vừa thiết lập`, type: 'budget_warning' });
     }
 
     res.status(200).json({ limit });
@@ -367,15 +367,138 @@ app.post('/notifications/read-all', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- USER PROFILE & SETTINGS ----
+app.put('/user/profile', authRequired, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Tên không được để trống.' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { name: name.trim() },
+      { new: true }
+    );
+    res.json({ user: sanitizeUser(user) });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể cập nhật hồ sơ.' });
+  }
+});
+
+app.put('/auth/change-password', authRequired, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Mật khẩu cũ không chính xác.' });
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    
+    res.json({ ok: true, message: 'Đổi mật khẩu thành công.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể đổi mật khẩu.' });
+  }
+});
+
+app.delete('/user/data', authRequired, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await Transaction.deleteMany({ userId });
+    await BudgetCategory.deleteMany({ userId });
+    await GlobalLimit.deleteMany({ userId });
+    await Notification.deleteMany({ userId });
+    
+    // Add a system note
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    const dateStr = `${day}/${month}/${year}`;
+
+    await Transaction.create({
+      userId,
+      amount: 0,
+      type: 'expense',
+      category: 'other',
+      note: 'Đã xóa toàn bộ dữ liệu',
+      date: dateStr
+    });
+
+    res.json({ ok: true, message: 'Đã xóa toàn bộ dữ liệu.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể xóa dữ liệu.' });
+  }
+});
+
+app.get('/user/export', authRequired, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const transactions = await Transaction.find({ userId });
+    const budgets = await BudgetCategory.find({ userId });
+    const limits = await GlobalLimit.find({ userId });
+    const notifications = await Notification.find({ userId });
+
+    res.json({
+      transactions,
+      budgets,
+      limits,
+      notifications
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể xuất dữ liệu.' });
+  }
+});
+
+app.post('/user/import', authRequired, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { transactions, budgets, limits, notifications } = req.body;
+
+    // Clear existing
+    await Transaction.deleteMany({ userId });
+    await BudgetCategory.deleteMany({ userId });
+    await GlobalLimit.deleteMany({ userId });
+    await Notification.deleteMany({ userId });
+
+    // Insert new
+    if (transactions && transactions.length) {
+      await Transaction.insertMany(transactions.map(t => ({ ...t, userId, _id: undefined })));
+    }
+    if (budgets && budgets.length) {
+      await BudgetCategory.insertMany(budgets.map(b => ({ ...b, userId, _id: undefined })));
+    }
+    if (limits && limits.length) {
+      await GlobalLimit.insertMany(limits.map(l => ({ ...l, userId, _id: undefined })));
+    }
+    if (notifications && notifications.length) {
+      await Notification.insertMany(notifications.map(n => ({ ...n, userId, _id: undefined })));
+    }
+
+    res.json({ ok: true, message: 'Phục hồi dữ liệu thành công.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Không thể phục hồi dữ liệu.' });
+  }
+});
+
 // ---- AI CHAT ----
 app.post('/ai-chat', authRequired, async (req, res) => {
   try {
     const { input, contextData } = req.body;
-    const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+    const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ message: 'GROQ_API_KEY chua duoc thiet lap tren server.' });
+      return res.status(500).json({ message: 'OPENAI_API_KEY chưa được thiết lập trên server.' });
     }
 
     const promptContext = `
@@ -390,33 +513,31 @@ app.post('/ai-chat', authRequired, async (req, res) => {
       Hay tra loi bang tieng Viet, than thien, ngan gon va dua ra cac loi khuyen thuc te.
     `;
 
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model,
-        instructions: promptContext,
-        input: String(input || '').trim(),
-        max_output_tokens: 500,
-      }),
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: promptContext },
+          { role: 'user', content: input }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
     });
 
-    const data = await groqResponse.json().catch(() => ({}));
-    if (!groqResponse.ok) {
-      console.error('Groq API Error:', data);
-      return res.status(500).json({ message: data?.error?.message || 'Khong the ket noi Groq.' });
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('OpenAI Error:', errorData);
+      return res.status(500).json({ message: 'Lỗi từ OpenAI API.' });
     }
 
-    const responseText =
-      data.output_text ||
-      data.output
-        ?.flatMap(item => item.content || [])
-        ?.map(content => content.text || '')
-        ?.join('')
-        ?.trim();
+    const data = await response.json();
+    const responseText = data.choices[0].message.content;
 
     res.json({ text: responseText || 'Xin loi, toi chua co cau tra loi phu hop luc nay.' });
   } catch (error) {

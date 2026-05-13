@@ -14,10 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
-import { formatVnd, useFinance } from '../contexts/FinanceContext';
+import { useFinance } from '../contexts/FinanceContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 function currentMonthLabel() {
   const now = new Date();
@@ -47,6 +48,9 @@ const NAV_TABS = [
 export default function LimitScreen({ navigation }) {
   const { token } = useAuth();
   const { transactions } = useFinance();
+  const { colors: COLORS, formatCurrency } = useSettings();
+  const s = useMemo(() => getStyles(COLORS), [COLORS]);
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [globalLimit, setGlobalLimit] = useState(null);
@@ -140,6 +144,7 @@ export default function LimitScreen({ navigation }) {
     else if (tabId === 'history') navigation.navigate('Transaction');
     else if (tabId === 'stats') navigation.navigate('Stats');
     else if (tabId === 'wallet') navigation.navigate('Budget');
+    else if (tabId === 'profile') navigation.navigate('Profile');
   };
 
   return (
@@ -147,7 +152,7 @@ export default function LimitScreen({ navigation }) {
       <View style={s.header}>
         <View style={s.logoRow}>
           <View style={s.logoCircle}>
-            <Ionicons name="speedometer" size={18} color={COLORS.white} />
+            <Ionicons name="speedometer" size={18} color="#FFF" />
           </View>
           <Text style={s.logoText}>MoMo Finance</Text>
         </View>
@@ -175,7 +180,7 @@ export default function LimitScreen({ navigation }) {
                 <View>
                   <Text style={s.totalLabel}>Hạn mức chi tiêu</Text>
                   {globalLimit ? (
-                    <Text style={s.totalAmount}>{formatVnd(limitAmount)}</Text>
+                    <Text style={s.totalAmount}>{formatCurrency(limitAmount)}</Text>
                   ) : (
                     <Text style={[s.totalAmount, { color: COLORS.gray, fontSize: 18 }]}>Chưa thiết lập</Text>
                   )}
@@ -183,7 +188,7 @@ export default function LimitScreen({ navigation }) {
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={s.spentLabel}>Đã chi</Text>
                   <Text style={s.spentValue}>
-                    {formatVnd(totalSpent)}{'\n'}
+                    {formatCurrency(totalSpent)}{'\n'}
                     {globalLimit && <Text style={s.pctText}>({Math.round(totalPct)}%)</Text>}
                   </Text>
                 </View>
@@ -199,10 +204,10 @@ export default function LimitScreen({ navigation }) {
                   </View>
                   {isOver ? (
                     <Text style={[s.remainText, { color: COLORS.danger, fontWeight: FONTS.bold }]}>
-                      Vượt hạn mức: {formatVnd(Math.abs(totalRemain))}
+                      Vượt hạn mức: {formatCurrency(Math.abs(totalRemain))}
                     </Text>
                   ) : (
-                    <Text style={s.remainText}>Còn lại: {formatVnd(totalRemain)}</Text>
+                    <Text style={s.remainText}>Còn lại: {formatCurrency(totalRemain)}</Text>
                   )}
                 </>
               )}
@@ -334,7 +339,7 @@ export default function LimitScreen({ navigation }) {
             </View>
 
             <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSaveLimit} disabled={saving}>
-              {saving ? <ActivityIndicator color={COLORS.white} /> : <Text style={s.saveBtnText}>Lưu thiết lập</Text>}
+              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={s.saveBtnText}>Lưu thiết lập</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -344,7 +349,7 @@ export default function LimitScreen({ navigation }) {
   );
 }
 
-const s = StyleSheet.create({
+const getStyles = (COLORS) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flexGrow: 1, paddingBottom: 80 },
 
@@ -355,7 +360,7 @@ const s = StyleSheet.create({
   logoText: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.primary },
   notifBtn: { position: 'relative', padding: 4 },
   badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
 
   // title
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 20, marginBottom: 12 },
@@ -377,8 +382,8 @@ const s = StyleSheet.create({
   editBtn: { marginHorizontal: 16, marginTop: 16, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed', paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   editBtnText: { color: COLORS.primary, fontSize: SIZES.base, fontWeight: FONTS.semiBold },
 
-  infoBox: { marginHorizontal: 16, marginTop: 24, backgroundColor: '#E0F2FE', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  infoText: { flex: 1, fontSize: SIZES.sm, color: '#0369A1', lineHeight: 20 },
+  infoBox: { marginHorizontal: 16, marginTop: 24, backgroundColor: `${COLORS.primary}15`, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  infoText: { flex: 1, fontSize: SIZES.sm, color: COLORS.primaryDark, lineHeight: 20 },
 
   // bottom nav
   bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, paddingBottom: 8, paddingTop: 4, ...SHADOWS.sm },
@@ -395,11 +400,11 @@ const s = StyleSheet.create({
   
   // form
   fieldLabel: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold, color: COLORS.dark, marginBottom: 8 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 16, height: 56, marginBottom: 24, backgroundColor: '#F8F9FA' },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 16, height: 56, marginBottom: 24, backgroundColor: COLORS.bg },
   currencyPrefix: { fontSize: SIZES.base, color: COLORS.gray, marginRight: 8, fontWeight: FONTS.bold },
   amountInput: { flex: 1, fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.bold },
   saveBtn: { backgroundColor: COLORS.primary, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', ...SHADOWS.md },
-  saveBtnText: { color: COLORS.white, fontSize: SIZES.base, fontWeight: FONTS.bold },
+  saveBtnText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
 
   // list empty
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },

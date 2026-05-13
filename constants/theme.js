@@ -1,5 +1,5 @@
 // Màu sắc & thiết kế chung toàn app
-export const COLORS = {
+export const lightColors = {
   primary:     '#E91E8C',
   primaryDark: '#C2166F',
   primaryLight:'#FF4FB8',
@@ -16,6 +16,26 @@ export const COLORS = {
   income:      '#2DCE89',
   expense:     '#F5365C',
 };
+
+export const darkColors = {
+  primary:     '#FF4FB8',
+  primaryDark: '#E91E8C',
+  primaryLight:'#C2166F',
+  secondary:   '#FF6B35',
+  bg:          '#121212',
+  white:       '#1E1E1E',
+  dark:        '#FFFFFF',
+  gray:        '#A0AABF',
+  lightGray:   '#555F72',
+  border:      '#2C2C2C',
+  success:     '#2DCE89',
+  danger:      '#F5365C',
+  warning:     '#FFC107',
+  income:      '#2DCE89',
+  expense:     '#F5365C',
+};
+
+export const COLORS = lightColors; // Fallback for files not yet refactored
 
 export const FONTS = {
   regular:  '400',

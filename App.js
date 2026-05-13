@@ -12,8 +12,10 @@ import StatsScreen from './screens/StatsScreen';
 import BudgetScreen from './screens/BudgetScreen';
 import LimitScreen from './screens/LimitScreen';
 import AIChatScreen from './screens/AIChatScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import { AuthProvider } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 
 const Stack = createStackNavigator();
 
@@ -21,8 +23,9 @@ export default function App() {
   return (
     <AuthProvider>
       <FinanceProvider>
-        <NavigationContainer>
-          <StatusBar style="dark" />
+        <SettingsProvider>
+          <NavigationContainer>
+            <StatusBar style="dark" />
           <Stack.Navigator
             initialRouteName="Login"
             screenOptions={{ headerShown: false }}
@@ -35,8 +38,10 @@ export default function App() {
             <Stack.Screen name="Budget" component={BudgetScreen} />
             <Stack.Screen name="Limit" component={LimitScreen} />
             <Stack.Screen name="AIChat" component={AIChatScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
           </Stack.Navigator>
-        </NavigationContainer>
+          </NavigationContainer>
+        </SettingsProvider>
       </FinanceProvider>
     </AuthProvider>
   );

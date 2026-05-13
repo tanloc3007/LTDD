@@ -15,10 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { BarChart, PieChart } from 'react-native-chart-kit';
-import { CATEGORIES, formatVnd, parseTransactionDate, useFinance } from '../contexts/FinanceContext';
-import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { CATEGORIES, parseTransactionDate, useFinance } from '../contexts/FinanceContext';
+import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 const screenWidth = Dimensions.get('window').width;
 const chartWidth = Math.min(screenWidth - 48, 340);
@@ -31,16 +32,6 @@ const NAV_TABS = [
   { id: 'profile', label: 'Ca nhan', icon: 'person' },
 ];
 
-const chartConfig = {
-  backgroundGradientFrom: COLORS.white,
-  backgroundGradientTo: COLORS.white,
-  color: (opacity = 1) => `rgba(233, 30, 140, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(136, 146, 164, ${opacity})`,
-  decimalPlaces: 0,
-  barPercentage: 0.45,
-  propsForBackgroundLines: { stroke: '#EEF2F7' },
-};
-
 const GROUP_CATEGORY_OPTIONS = [
   { id: 'food', label: 'An uong', icon: 'restaurant', color: '#E91E8C' },
   { id: 'transport', label: 'Di chuyen', icon: 'car', color: '#178BFF' },
@@ -52,6 +43,19 @@ const GROUP_CATEGORY_OPTIONS = [
 export default function StatsScreen({ navigation }) {
   const { transactions } = useFinance();
   const { token } = useAuth();
+  const { colors: COLORS, formatCurrency } = useSettings();
+  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
+
+  const chartConfig = useMemo(() => ({
+    backgroundGradientFrom: COLORS.white,
+    backgroundGradientTo: COLORS.white,
+    color: (opacity = 1) => `rgba(233, 30, 140, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(136, 146, 164, ${opacity})`,
+    decimalPlaces: 0,
+    barPercentage: 0.45,
+    propsForBackgroundLines: { stroke: COLORS.border },
+  }), [COLORS]);
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const [mainTab, setMainTab] = useState('personal');
   const [period, setPeriod] = useState('month');
@@ -140,8 +144,8 @@ export default function StatsScreen({ navigation }) {
   }));
 
   const barData = useMemo(
-    () => buildPeriodBarData(decoratedTransactions, period, referenceDate, currentDate),
-    [decoratedTransactions, period, referenceDate, currentDate]
+    () => buildPeriodBarData(decoratedTransactions, period, referenceDate, currentDate, COLORS),
+    [decoratedTransactions, period, referenceDate, currentDate, COLORS]
   );
 
   const groupCategoryStats = useMemo(() => {
@@ -165,6 +169,8 @@ export default function StatsScreen({ navigation }) {
     if (tabId === 'home') navigation.navigate('Home');
     else if (tabId === 'history') navigation.navigate('Transaction');
     else if (tabId === 'stats') navigation.navigate('Stats');
+    else if (tabId === 'wallet') navigation.navigate('Budget');
+    else if (tabId === 'profile') navigation.navigate('Profile');
     else Alert.alert('Tinh nang', 'Man hinh dang phat trien!');
   };
 
@@ -265,6 +271,10 @@ export default function StatsScreen({ navigation }) {
           pieData={pieData}
           categoryStats={categoryStats}
           barData={barData}
+          COLORS={COLORS}
+          styles={styles}
+          formatCurrency={formatCurrency}
+          chartConfig={chartConfig}
         />
       ) : (
         <GroupStats
@@ -288,10 +298,13 @@ export default function StatsScreen({ navigation }) {
           removeGroupCategory={removeGroupCategory}
           groupCategoryStats={groupCategoryStats}
           perPersonAmount={perPersonAmount}
+          COLORS={COLORS}
+          styles={styles}
+          formatCurrency={formatCurrency}
         />
       )}
 
-      <BottomNav activeTab="stats" onPress={handleNav} />
+      <BottomNav activeTab="stats" onPress={handleNav} COLORS={COLORS} styles={styles} />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>
@@ -350,7 +363,7 @@ export default function StatsScreen({ navigation }) {
   );
 }
 
-function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, categoryStats, barData }) {
+function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, categoryStats, barData, COLORS, styles, formatCurrency, chartConfig }) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.periodTabs}>
@@ -370,8 +383,8 @@ function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, 
       </View>
 
       <View style={styles.summaryRow}>
-        <SummaryCard label="Tong Chi" value={formatVnd(totalExpense)} color={COLORS.danger} />
-        <SummaryCard label="Tong Thu" value={formatVnd(totalIncome)} color={COLORS.success} />
+        <SummaryCard label="Tong Chi" value={formatCurrency(totalExpense)} color={COLORS.danger} styles={styles} />
+        <SummaryCard label="Tong Thu" value={formatCurrency(totalIncome)} color={COLORS.success} styles={styles} />
       </View>
 
       <View style={styles.card}>
@@ -409,7 +422,7 @@ function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, 
       <View style={styles.detailCard}>
         {categoryStats.length ? (
           categoryStats.map((item) => (
-            <CategoryDetail key={item.id} item={item} total={totalExpense} />
+            <CategoryDetail key={item.id} item={item} total={totalExpense} styles={styles} formatCurrency={formatCurrency} />
           ))
         ) : (
           <Text style={styles.emptyState}>Chua co du lieu chi tieu trong bo loc nay.</Text>
@@ -440,6 +453,9 @@ function GroupStats({
   removeGroupCategory,
   groupCategoryStats,
   perPersonAmount,
+  COLORS,
+  styles,
+  formatCurrency,
 }) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -453,7 +469,7 @@ function GroupStats({
         </View>
 
         <View style={styles.billBox}>
-          <Text style={styles.billLabel}>Tong so tien (VND)</Text>
+          <Text style={styles.billLabel}>Tong so tien</Text>
           {editingGroupTotal ? (
             <View>
               <TextInput
@@ -474,7 +490,7 @@ function GroupStats({
               </View>
             </View>
           ) : (
-            <Text style={styles.billAmount}>{formatVnd(groupTotalAmount)}</Text>
+            <Text style={styles.billAmount}>{formatCurrency(groupTotalAmount)}</Text>
           )}
 
           {!editingGroupTotal && (
@@ -503,7 +519,7 @@ function GroupStats({
             style={styles.memberInput}
           />
           <TouchableOpacity style={styles.addMemberButton} onPress={addGroupMember}>
-            <Ionicons name="add" size={18} color={COLORS.white} />
+            <Ionicons name="add" size={18} color="#FFF" />
           </TouchableOpacity>
         </View>
 
@@ -538,7 +554,7 @@ function GroupStats({
                 style={[styles.groupCategoryTab, active && styles.groupCategoryTabActive]}
                 onPress={() => setSelectedGroupCategoryId(item.id)}
               >
-                <Ionicons name={item.icon} size={16} color={active ? COLORS.white : item.color} />
+                <Ionicons name={item.icon} size={16} color={active ? '#FFF' : item.color} />
                 <Text style={[styles.groupCategoryTabText, active && styles.groupCategoryTabTextActive]}>
                   {item.label}
                 </Text>
@@ -557,7 +573,7 @@ function GroupStats({
             style={styles.groupCategoryInput}
           />
           <TouchableOpacity style={styles.groupCategoryActionButton} onPress={upsertGroupCategory}>
-            <Ionicons name="save-outline" size={18} color={COLORS.white} />
+            <Ionicons name="save-outline" size={18} color="#FFF" />
           </TouchableOpacity>
         </View>
 
@@ -568,7 +584,7 @@ function GroupStats({
                 <Ionicons name={item.icon} size={17} color={item.color} />
               </View>
               <Text style={styles.groupCategoryName}>{item.label}</Text>
-              <Text style={styles.groupCategoryAmount}>{formatVnd(item.amount)}</Text>
+              <Text style={styles.groupCategoryAmount}>{formatCurrency(item.amount)}</Text>
               <TouchableOpacity style={styles.groupCategoryDeleteButton} onPress={() => removeGroupCategory(item.itemId)}>
                 <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
               </TouchableOpacity>
@@ -581,13 +597,13 @@ function GroupStats({
 
       <View style={styles.perPersonCard}>
         <Text style={styles.perPersonLabel}>SO TIEN MOI NGUOI</Text>
-        <Text style={styles.perPersonAmount}>{formatVnd(perPersonAmount)}</Text>
+        <Text style={styles.perPersonAmount}>{formatCurrency(perPersonAmount)}</Text>
       </View>
     </ScrollView>
   );
 }
 
-function SummaryCard({ label, value, color }) {
+function SummaryCard({ label, value, color, styles }) {
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -596,7 +612,7 @@ function SummaryCard({ label, value, color }) {
   );
 }
 
-function CategoryDetail({ item, total }) {
+function CategoryDetail({ item, total, styles, formatCurrency }) {
   const percent = total > 0 ? Math.round((item.total / total) * 100) : 0;
   return (
     <View style={styles.detailRow}>
@@ -606,7 +622,7 @@ function CategoryDetail({ item, total }) {
       <View style={styles.detailInfo}>
         <View style={styles.detailTop}>
           <Text style={styles.detailName}>{item.label}</Text>
-          <Text style={styles.detailAmount}>{formatVnd(item.total)}</Text>
+          <Text style={styles.detailAmount}>{formatCurrency(item.total)}</Text>
         </View>
         <Text style={styles.detailPercent}>{percent}%</Text>
         <View style={styles.progressTrack}>
@@ -617,7 +633,7 @@ function CategoryDetail({ item, total }) {
   );
 }
 
-function BottomNav({ activeTab, onPress }) {
+function BottomNav({ activeTab, onPress, COLORS, styles }) {
   return (
     <View style={styles.bottomNav}>
       {NAV_TABS.map((tab) => {
@@ -658,13 +674,13 @@ function isInSelectedPeriod(date, period, now) {
   return true;
 }
 
-function buildPeriodBarData(transactions, period, referenceDate, currentDate) {
-  if (period === 'week') return buildWeekBarData(transactions, referenceDate);
-  if (period === 'month') return buildMonthBarData(transactions, referenceDate);
-  return buildYearBarData(transactions, currentDate);
+function buildPeriodBarData(transactions, period, referenceDate, currentDate, COLORS) {
+  if (period === 'week') return buildWeekBarData(transactions, referenceDate, COLORS);
+  if (period === 'month') return buildMonthBarData(transactions, referenceDate, COLORS);
+  return buildYearBarData(transactions, currentDate, COLORS);
 }
 
-function buildWeekBarData(transactions, referenceDate) {
+function buildWeekBarData(transactions, referenceDate, COLORS) {
   const labels = [];
   const incomeData = [];
   const expenseData = [];
@@ -680,10 +696,10 @@ function buildWeekBarData(transactions, referenceDate) {
     expenseData.push(totals.expense);
   }
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo tuan');
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo tuan', COLORS);
 }
 
-function buildMonthBarData(transactions, referenceDate) {
+function buildMonthBarData(transactions, referenceDate, COLORS) {
   const labels = [];
   const incomeData = [];
   const expenseData = [];
@@ -717,10 +733,10 @@ function buildMonthBarData(transactions, referenceDate) {
     expenseData.push(totals.expense);
   });
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo thang');
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo thang', COLORS);
 }
 
-function buildYearBarData(transactions, currentDate) {
+function buildYearBarData(transactions, currentDate, COLORS) {
   const labels = [];
   const incomeData = [];
   const expenseData = [];
@@ -750,7 +766,7 @@ function buildYearBarData(transactions, currentDate) {
     expenseData.push(totals.expense);
   });
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo nam');
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo nam', COLORS);
 }
 
 function sumTransactionsForDay(transactions, targetDate) {
@@ -775,7 +791,7 @@ function sumTransactionsForDay(transactions, targetDate) {
   );
 }
 
-function buildChartPayload(labels, incomeRaw, expenseRaw, title) {
+function buildChartPayload(labels, incomeRaw, expenseRaw, title, COLORS) {
   const maxValue = Math.max(...incomeRaw, ...expenseRaw, 0);
   const scale = maxValue >= 1000000 ? 1000000 : maxValue >= 1000 ? 1000 : 1;
   const yAxisSuffix = scale === 1000000 ? 'tr' : scale === 1000 ? 'k' : '';
@@ -794,7 +810,7 @@ function buildChartPayload(labels, incomeRaw, expenseRaw, title) {
   };
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     height: 52,
@@ -817,14 +833,14 @@ const styles = StyleSheet.create({
   brand: { fontSize: SIZES.sm, fontWeight: FONTS.extraBold, color: COLORS.primaryDark },
   bell: { position: 'relative', padding: 4 },
   badge: { position: 'absolute', top: 0, right: 0, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  badgeText: { color: COLORS.white, fontSize: 8, fontWeight: FONTS.bold },
+  badgeText: { color: '#FFF', fontSize: 8, fontWeight: FONTS.bold },
   topTabs: { height: 42, backgroundColor: COLORS.white, flexDirection: 'row' },
   topTab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topTabText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.medium },
   topTabTextActive: { color: COLORS.primaryDark, fontWeight: FONTS.bold },
   topTabLine: { position: 'absolute', bottom: 0, width: '88%', height: 3, backgroundColor: COLORS.primaryDark },
   scroll: { padding: 14, paddingBottom: 92 },
-  periodTabs: { flexDirection: 'row', backgroundColor: '#F2F3F6', borderRadius: 8, padding: 3, marginBottom: 14 },
+  periodTabs: { flexDirection: 'row', backgroundColor: COLORS.bg, borderRadius: 8, padding: 3, marginBottom: 14, borderWidth: 1, borderColor: COLORS.border },
   periodItem: { flex: 1, height: 30, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   periodActive: { backgroundColor: COLORS.white },
   periodText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.medium },
@@ -845,13 +861,13 @@ const styles = StyleSheet.create({
   detailName: { fontSize: SIZES.sm, color: COLORS.dark, fontWeight: FONTS.medium },
   detailAmount: { fontSize: SIZES.xs, color: COLORS.danger, fontWeight: FONTS.bold },
   detailPercent: { fontSize: 10, color: COLORS.gray, marginTop: 2 },
-  progressTrack: { height: 4, backgroundColor: '#ECEFF4', borderRadius: 4, marginTop: 7 },
+  progressTrack: { height: 4, backgroundColor: COLORS.border, borderRadius: 4, marginTop: 7 },
   progressFill: { height: 4, borderRadius: 4 },
   groupCard: { backgroundColor: COLORS.white, borderRadius: 14, padding: 14, marginBottom: 14, ...SHADOWS.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardHeaderTitle: { fontSize: SIZES.sm, color: COLORS.dark, fontWeight: FONTS.bold },
-  billBox: { backgroundColor: '#F8F9FC', borderRadius: 8, padding: 12, marginBottom: 12 },
+  billBox: { backgroundColor: COLORS.bg, borderRadius: 8, padding: 12, marginBottom: 12 },
   billLabel: { fontSize: SIZES.xs, color: COLORS.gray, marginBottom: 4 },
   billAmount: { fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.extraBold },
   totalInput: {
@@ -869,7 +885,7 @@ const styles = StyleSheet.create({
   smallGhostButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FDE2EE' },
   smallGhostText: { color: COLORS.primaryDark, fontSize: SIZES.xs, fontWeight: FONTS.bold },
   smallPrimaryButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.primaryDark },
-  smallPrimaryText: { color: COLORS.white, fontSize: SIZES.xs, fontWeight: FONTS.bold },
+  smallPrimaryText: { color: '#FFF', fontSize: SIZES.xs, fontWeight: FONTS.bold },
   editBill: {
     position: 'absolute',
     right: 12,
@@ -910,7 +926,7 @@ const styles = StyleSheet.create({
   memberRow: {
     height: 42,
     borderRadius: 10,
-    backgroundColor: '#F6F7FA',
+    backgroundColor: COLORS.bg,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
@@ -938,7 +954,7 @@ const styles = StyleSheet.create({
   groupCategoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FC',
+    backgroundColor: COLORS.bg,
     borderRadius: 9,
     padding: 10,
     marginBottom: 8,
@@ -951,12 +967,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 18,
-    backgroundColor: '#F8F9FC',
+    backgroundColor: COLORS.bg,
     marginRight: 8,
   },
   groupCategoryTabActive: { backgroundColor: COLORS.primaryDark },
   groupCategoryTabText: { fontSize: SIZES.xs, color: COLORS.dark, fontWeight: FONTS.medium },
-  groupCategoryTabTextActive: { color: COLORS.white, fontWeight: FONTS.bold },
+  groupCategoryTabTextActive: { color: '#FFF', fontWeight: FONTS.bold },
   groupCategoryInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   groupCategoryInput: {
     flex: 1,
@@ -989,7 +1005,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   perPersonCard: {
-    backgroundColor: '#FAD6E6',
+    backgroundColor: `${COLORS.primary}20`,
     borderTopWidth: 3,
     borderTopColor: COLORS.primary,
     borderRadius: 10,

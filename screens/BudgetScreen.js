@@ -14,10 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS, SHADOWS, SIZES } from '../constants/theme';
+import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
-import { CATEGORIES, formatVnd, useFinance } from '../contexts/FinanceContext';
+import { useFinance } from '../contexts/FinanceContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function currentMonthLabel() {
@@ -65,6 +66,9 @@ const NAV_TABS = [
 export default function BudgetScreen({ navigation }) {
   const { token } = useAuth();
   const { transactions } = useFinance();
+  const { colors: COLORS, formatCurrency } = useSettings();
+  const s = useMemo(() => getStyles(COLORS), [COLORS]);
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [budgets, setBudgets] = useState([]);
@@ -205,6 +209,8 @@ export default function BudgetScreen({ navigation }) {
     if (tabId === 'home') navigation.navigate('Home');
     else if (tabId === 'history') navigation.navigate('Transaction');
     else if (tabId === 'stats') navigation.navigate('Stats');
+    else if (tabId === 'wallet') navigation.navigate('Budget');
+    else if (tabId === 'profile') navigation.navigate('Profile');
   };
 
   // ── categories not yet added ──
@@ -219,7 +225,7 @@ export default function BudgetScreen({ navigation }) {
       <View style={s.header}>
         <View style={s.logoRow}>
           <View style={s.logoCircle}>
-            <Ionicons name="wallet" size={18} color={COLORS.white} />
+            <Ionicons name="wallet" size={18} color="#FFF" />
           </View>
           <Text style={s.logoText}>MoMo Finance</Text>
         </View>
@@ -252,12 +258,12 @@ export default function BudgetScreen({ navigation }) {
               <View style={s.totalTop}>
                 <View>
                   <Text style={s.totalLabel}>Tổng ngân sách</Text>
-                  <Text style={s.totalAmount}>{formatVnd(totalBudget)}</Text>
+                  <Text style={s.totalAmount}>{formatCurrency(totalBudget)}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={s.spentLabel}>Đã chi</Text>
                   <Text style={s.spentValue}>
-                    {formatVnd(totalSpent)}{'\n'}
+                    {formatCurrency(totalSpent)}{'\n'}
                     <Text style={s.pctText}>({Math.round(totalPct)}%)</Text>
                   </Text>
                 </View>
@@ -269,7 +275,7 @@ export default function BudgetScreen({ navigation }) {
                   backgroundColor: totalPct >= 100 ? COLORS.danger : totalPct >= 80 ? COLORS.warning : COLORS.success,
                 }]} />
               </View>
-              <Text style={s.remainText}>Còn lại: {formatVnd(Math.max(totalRemain, 0))}</Text>
+              <Text style={s.remainText}>Còn lại: {formatCurrency(Math.max(totalRemain, 0))}</Text>
             </View>
 
             {/* ── CATEGORY LIST ── */}
@@ -296,11 +302,11 @@ export default function BudgetScreen({ navigation }) {
                       </View>
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={[s.catName, over && { color: COLORS.danger }]}>{b.label}</Text>
-                        <Text style={s.catBudget}>Ngân sách: {formatVnd(b.budgetAmount)}</Text>
+                        <Text style={s.catBudget}>Ngân sách: {formatCurrency(b.budgetAmount)}</Text>
                       </View>
                       <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={s.catSpent}>{formatVnd(spent)}</Text>
+                          <Text style={s.catSpent}>{formatCurrency(spent)}</Text>
                           <Text style={[s.catPct, { color: barColor }]}>{Math.round(pct)}%</Text>
                         </View>
                         <TouchableOpacity
@@ -317,7 +323,7 @@ export default function BudgetScreen({ navigation }) {
                     </View>
                     {over && (
                       <Text style={s.overText}>
-                        Vượt ngân sách {formatVnd(spent - b.budgetAmount)}
+                        Vượt ngân sách {formatCurrency(spent - b.budgetAmount)}
                       </Text>
                     )}
                   </View>
@@ -482,7 +488,7 @@ export default function BudgetScreen({ navigation }) {
 }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
+const getStyles = (COLORS) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flexGrow: 1, paddingBottom: 8 },
 
@@ -493,7 +499,7 @@ const s = StyleSheet.create({
   logoText: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.primary },
   notifBtn: { position: 'relative', padding: 4 },
   badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: COLORS.white, fontSize: 9, fontWeight: FONTS.bold },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
 
   // title
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 20, marginBottom: 12 },
@@ -559,7 +565,7 @@ const s = StyleSheet.create({
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white },
   catChipLabel: { fontSize: SIZES.sm, fontWeight: FONTS.medium, color: COLORS.gray },
-  input: { borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: SIZES.base, color: COLORS.dark, marginBottom: 20, backgroundColor: '#FAFBFF' },
+  input: { borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: SIZES.base, color: COLORS.dark, marginBottom: 20, backgroundColor: COLORS.bg },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  saveBtnText: { color: COLORS.white, fontSize: SIZES.base, fontWeight: FONTS.bold },
+  saveBtnText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
 });
