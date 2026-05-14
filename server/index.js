@@ -495,10 +495,11 @@ app.post('/user/import', authRequired, async (req, res) => {
 app.post('/ai-chat', authRequired, async (req, res) => {
   try {
     const { input, contextData } = req.body;
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
     if (!apiKey) {
-      return res.status(500).json({ message: 'OPENAI_API_KEY chưa được thiết lập trên server.' });
+      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập trên server.' });
     }
 
     const promptContext = `
@@ -513,14 +514,14 @@ app.post('/ai-chat', authRequired, async (req, res) => {
       Hay tra loi bang tieng Viet, than thien, ngan gon va dua ra cac loi khuyen thuc te.
     `;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: model,
         messages: [
           { role: 'system', content: promptContext },
           { role: 'user', content: input }
@@ -532,8 +533,8 @@ app.post('/ai-chat', authRequired, async (req, res) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('OpenAI Error:', errorData);
-      return res.status(500).json({ message: 'Lỗi từ OpenAI API.' });
+      console.error('Groq Error:', errorData);
+      return res.status(500).json({ message: 'Lỗi từ Groq API.' });
     }
 
     const data = await response.json();
