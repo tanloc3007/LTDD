@@ -38,34 +38,24 @@ export function FinanceProvider({ children }) {
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  useEffect(() => {
+  const fetchTransactions = async () => {
     if (!token) {
       setTransactions(initialTransactions);
       return;
     }
-
-    let mounted = true;
     setLoading(true);
-    apiRequest('/transactions', { headers: authHeaders })
-      .then((data) => {
-        if (mounted) {
-          setTransactions(data.transactions || []);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setTransactions([]);
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
+    try {
+      const data = await apiRequest('/transactions', { headers: authHeaders });
+      setTransactions(data.transactions || []);
+    } catch (error) {
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => {
-      mounted = false;
-    };
+  useEffect(() => {
+    fetchTransactions();
   }, [token]);
 
   const addTransaction = async (transaction) => {
@@ -113,7 +103,7 @@ export function FinanceProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ transactions, loading, addTransaction, updateTransaction, deleteTransaction }),
+    () => ({ transactions, loading, fetchTransactions, addTransaction, updateTransaction, deleteTransaction }),
     [transactions, loading, token]
   );
 

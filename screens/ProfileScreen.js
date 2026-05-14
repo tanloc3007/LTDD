@@ -9,7 +9,7 @@ import { apiRequest } from '../constants/api';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 
 const FONTS = {
@@ -329,20 +329,20 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>TÀI KHOẢN</Text>
         <View style={styles.sectionBox}>
           <SettingItem 
-            COLORS={COLORS} icon="notifications" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="notifications" iconColor={COLORS.primary} 
             label="Thông báo" onPress={() => setShowNotifModal(true)} hasBadge={unreadCount > 0}
           />
           <SettingItem 
-            COLORS={COLORS} icon="shield-checkmark" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="shield-checkmark" iconColor={COLORS.primary} 
             label="Bảo mật & Mật khẩu" onPress={() => setShowPassModal(true)} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="color-palette" iconBg={COLORS.purpleLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="color-palette" iconColor={COLORS.primary} 
             label="Giao diện" value={theme === 'light' ? 'Sáng' : 'Tối'} 
             onPress={() => setShowThemeModal(true)} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="wallet" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="wallet" iconColor={COLORS.primary} 
             label="Đơn vị tiền tệ" value={currency} 
             onPress={() => setShowCurrencyModal(true)} isLast
           />
@@ -352,22 +352,22 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>DỮ LIỆU</Text>
         <View style={styles.sectionBox}>
           <SettingItem 
-            COLORS={COLORS} icon="download" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="download" iconColor={COLORS.primary} 
             label="Xuất dữ liệu PDF" value={exporting ? 'Đang xuất...' : ''}
             onPress={handleExportData} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="sync" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="sync" iconColor={COLORS.primary} 
             label="Sao lưu dữ liệu JSON" 
             onPress={handleBackup} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="refresh" iconBg={COLORS.warningLight} iconColor={COLORS.warning} 
+            COLORS={COLORS} icon="refresh" iconColor={COLORS.warning} 
             label="Khôi phục dữ liệu JSON" value={restoring ? 'Đang tải...' : ''}
             onPress={handleRestore} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="trash-bin" iconBg={COLORS.dangerLight} iconColor={COLORS.danger} 
+            COLORS={COLORS} icon="trash-bin" iconColor={COLORS.danger} 
             label="Xóa tất cả dữ liệu" labelStyle={{ color: COLORS.danger }}
             onPress={handleDeleteData} hideChevron isLast
           />
@@ -377,15 +377,15 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>KHÁC</Text>
         <View style={styles.sectionBox}>
           <SettingItem 
-            COLORS={COLORS} icon="help-circle" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="help-circle" iconColor={COLORS.primary} 
             label="Trợ giúp & FAQ" onPress={developingFeature} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="star" iconBg={COLORS.warningLight} iconColor={COLORS.warning} 
+            COLORS={COLORS} icon="star" iconColor={COLORS.warning} 
             label="Đánh giá ứng dụng" onPress={() => setShowRateModal(true)} 
           />
           <SettingItem 
-            COLORS={COLORS} icon="information-circle" iconBg={COLORS.primaryLight} iconColor={COLORS.primary} 
+            COLORS={COLORS} icon="information-circle" iconColor={COLORS.primary} 
             label="Phiên bản" value="1.0.0" hideChevron onPress={developingFeature} isLast
           />
         </View>
@@ -596,7 +596,7 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-function SettingItem({ COLORS, icon, iconBg, iconColor, label, value, onPress, isLast, labelStyle, hideChevron, hasBadge }) {
+function SettingItem({ COLORS, icon, iconColor, label, value, onPress, isLast, labelStyle, hideChevron, hasBadge }) {
   const styles = getStyles(COLORS);
   return (
     <TouchableOpacity 
@@ -604,8 +604,8 @@ function SettingItem({ COLORS, icon, iconBg, iconColor, label, value, onPress, i
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[styles.settingIcon, { backgroundColor: iconBg }]}>
-        <Ionicons name={icon} size={18} color={iconColor} />
+      <View style={[styles.settingIcon, { backgroundColor: `${iconColor}20` }]}>
+        <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <View style={styles.settingLabelWrap}>
         <Text style={[styles.settingLabel, labelStyle]}>{label}</Text>
@@ -680,9 +680,9 @@ const getStyles = (COLORS) => StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.bg,
   },
   settingIcon: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 36, height: 36, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   settingLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   settingLabel: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold, color: COLORS.dark },
