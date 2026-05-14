@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, Modal, TextInput, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import AppBottomNav from '../components/AppBottomNav';
 
 const FONTS = {
   regular: '400',
@@ -27,14 +28,6 @@ const SIZES = {
   md: 18,
   lg: 20,
 };
-
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home' },
-  { id: 'history', label: 'Giao dich', icon: 'list' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person' },
-];
 
 export default function ProfileScreen({ navigation }) {
   const { user, token, logout, setUser } = useAuth();
@@ -142,7 +135,7 @@ export default function ProfileScreen({ navigation }) {
   const handleDeleteData = () => {
     Alert.alert(
       'Xóa tất cả dữ liệu',
-      'Bạn có chắc chắn muốn xóa dữ liệu giao dịch, ngân sách không? Lịch sử sẽ lưu lại hành động này.',
+      'Bạn có chắc chắn muốn xóa toàn bộ giao dịch, ngân sách, hạn mức và thông báo không?',
       [
         { text: 'Hủy', style: 'cancel' },
         { 
@@ -289,15 +282,6 @@ export default function ProfileScreen({ navigation }) {
     ]);
   };
 
-  const handleNav = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') return;
-    else Alert.alert('Tinh nang', 'Man hinh dang phat trien!');
-  };
-
   const developingFeature = () => Alert.alert('Thông báo', 'Tính năng đang được phát triển.');
 
   return (
@@ -317,12 +301,12 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
             <Image 
-              source={{ uri: 'https://i.pravatar.cc/150?u=' + (user?.email || 'demo') }} 
+              source={{ uri: 'https://i.pravatar.cc/150?u=' + encodeURIComponent(user?.email || user?.id || 'user') }} 
               style={styles.avatar}
             />
           </View>
-          <Text style={styles.userName}>{user?.name || 'Nguyễn Văn A'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'nguyen.van.a@example.com'}</Text>
+          <Text style={styles.userName}>{user?.name || 'Nguoi dung'}</Text>
+          <Text style={styles.userEmail}>{user?.email || ''}</Text>
           <TouchableOpacity 
             style={styles.editBtn} 
             onPress={() => {
@@ -409,22 +393,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const active = 'profile' === tab.id;
-          return (
-            <TouchableOpacity key={tab.id} style={styles.navItem} onPress={() => handleNav(tab.id)}>
-              <Ionicons
-                name={active ? tab.icon : `${tab.icon}-outline`}
-                size={22}
-                color={active ? COLORS.primary : COLORS.gray}
-              />
-              <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="profile" position="absolute" />
 
       {/* Modals ────────────────────────────────────────────────────────── */}
       {/* Theme Modal */}

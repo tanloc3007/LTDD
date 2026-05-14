@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+﻿import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
+import AppBottomNav from '../components/AppBottomNav';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function currentMonthLabel() {
@@ -61,13 +62,6 @@ function getCatMeta(categoryId) {
 }
 
 // ─── NAV TABS (shared) ───────────────────────────────────────────────────────
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chủ', icon: 'home' },
-  { id: 'history', label: 'Giao dịch', icon: 'list' },
-  { id: 'stats', label: 'Thống kê', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngân sách', icon: 'wallet' },
-  { id: 'profile', label: 'Cá nhân', icon: 'person' },
-];
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function BudgetScreen({ navigation }) {
@@ -154,13 +148,6 @@ export default function BudgetScreen({ navigation }) {
   };
 
   // ── nav ──
-  const handleTabPress = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') navigation.navigate('Profile');
-  };
 
   // ── FAQ ──
   const [expandedFaq, setExpandedFaq] = useState(null);
@@ -292,28 +279,7 @@ export default function BudgetScreen({ navigation }) {
       </ScrollView>
 
       {/* ── BOTTOM NAV ── */}
-      <View style={s.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const isActive = tab.id === 'wallet';
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={s.navItem}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[s.navIconWrap, isActive && s.navIconActive]}>
-                <Ionicons
-                  name={isActive ? tab.icon : `${tab.icon}-outline`}
-                  size={22}
-                  color={isActive ? COLORS.primary : COLORS.gray}
-                />
-              </View>
-              <Text style={[s.navLabel, isActive && s.navLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="wallet" />
 
       {/* ═══════════ NOTIFICATION MODAL ═══════════ */}
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>

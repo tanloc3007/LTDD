@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -81,7 +81,7 @@ export default function AIChatScreen({ navigation }) {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      text: `Xin chào ${user?.name || 'Luân'}! Tôi là trợ lý tài chính AI của bạn. Tôi có thể giúp gì cho bạn hôm nay?`,
+      text: `Xin chao ${user?.name || 'ban'}! Toi la tro ly tai chinh AI cua ban. Toi co the giup gi cho ban hom nay?`,
       sender: 'ai',
       timestamp: new Date(),
     },

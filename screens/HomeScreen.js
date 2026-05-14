@@ -8,19 +8,12 @@ import { getCategory, useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
-
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home' },
-  { id: 'history', label: 'Giao dich', icon: 'list' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person' },
-];
+import AppBottomNav from '../components/AppBottomNav';
 
 export default function HomeScreen({ navigation, route }) {
-  const userName = route?.params?.userName || 'Luan';
   const { transactions, loading } = useFinance();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const userName = user?.name || route?.params?.userName || '';
   const { colors: COLORS, formatCurrency } = useSettings();
   const styles = useMemo(() => getStyles(COLORS), [COLORS]);
 
@@ -33,7 +26,6 @@ export default function HomeScreen({ navigation, route }) {
   ];
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const [activeTab, setActiveTab] = useState('home');
   const [hideBalance, setHideBalance] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -106,22 +98,6 @@ export default function HomeScreen({ navigation, route }) {
     return `Danh muc ${getCategory(topCategoryId).label} dang chiem ${percent}% tong chi. Ban co the xem lai muc nay de toi uu ngan sach.`;
   }, [summary.totalExpense, transactions]);
 
-  const handleTabPress = (tabId) => {
-    if (tabId === 'history') {
-      navigation.navigate('Transaction');
-    } else if (tabId === 'stats') {
-      navigation.navigate('Stats');
-    } else if (tabId === 'wallet') {
-      navigation.navigate('Budget');
-    } else if (tabId === 'profile') {
-      navigation.navigate('Profile');
-    } else if (tabId !== 'home') {
-      Alert.alert('Tinh nang', `Man hinh "${NAV_TABS.find((t) => t.id === tabId)?.label}" dang phat trien!`);
-    } else {
-      setActiveTab(tabId);
-    }
-  };
-
   const handleQuickAction = (action) => {
     if (action.id === '1') {
       navigation.navigate('Transaction');
@@ -148,7 +124,7 @@ export default function HomeScreen({ navigation, route }) {
             </View>
             <View>
               <Text style={styles.greetText}>Xin chao,</Text>
-              <Text style={styles.userName}>{userName.charAt(0).toUpperCase() + userName.slice(1)}</Text>
+              <Text style={styles.userName}>{userName || 'Nguoi dung'}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
@@ -256,30 +232,7 @@ export default function HomeScreen({ navigation, route }) {
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={styles.navItem}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.navIconWrap, isActive && styles.navIconActive]}>
-                <Ionicons
-                  name={isActive ? tab.icon : `${tab.icon}-outline`}
-                  size={22}
-                  color={isActive ? COLORS.primary : COLORS.gray}
-                />
-              </View>
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="home" />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>

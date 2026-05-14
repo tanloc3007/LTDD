@@ -26,14 +26,7 @@ import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { apiRequest } from '../constants/api';
-
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home' },
-  { id: 'history', label: 'Giao dich', icon: 'add-circle' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person' },
-];
+import AppBottomNav from '../components/AppBottomNav';
 
 export default function TransactionScreen({ navigation }) {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useFinance();
@@ -173,15 +166,6 @@ export default function TransactionScreen({ navigation }) {
     ]);
   };
 
-  const handleNav = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') navigation.navigate('Profile');
-    else Alert.alert('Tinh nang', 'Man hinh dang phat trien!');
-  };
-
   const handleDateChange = (event, value) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
@@ -318,21 +302,7 @@ export default function TransactionScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const active = 'history' === tab.id;
-          return (
-            <TouchableOpacity key={tab.id} style={styles.navItem} onPress={() => handleNav(tab.id)}>
-              <Ionicons
-                name={active ? tab.icon : `${tab.icon}-outline`}
-                size={20}
-                color={active ? COLORS.primary : COLORS.gray}
-              />
-              <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="history" position="absolute" />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>

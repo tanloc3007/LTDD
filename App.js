@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler'; // phải là dòng đầu tiên
 import React from 'react';
+import { Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,65 @@ import { SettingsProvider } from './contexts/SettingsContext';
 
 const Stack = createStackNavigator();
 
+const smoothScreenTransition = {
+  animation: 'timing',
+  config: {
+    duration: 300,
+    easing: Easing.out(Easing.poly(4)),
+  },
+};
+
+const tabRoutes = new Set(['Home', 'Transaction', 'Stats', 'Budget', 'Profile']);
+
+const createCardStyleInterpolator = (route) => ({ current, layouts }) => {
+  const isTabRoute = tabRoutes.has(route.name);
+  const direction = route.params?.tabTransitionDirection || 1;
+  const travel = isTabRoute ? layouts.screen.width * 0.12 : 18;
+
+  return {
+    cardStyle: {
+      opacity: current.progress.interpolate({
+        inputRange: [0, 0.45, 1],
+        outputRange: [0, 0.96, 1],
+        extrapolate: 'clamp',
+      }),
+      transform: isTabRoute
+        ? [
+            {
+              translateX: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [direction * travel, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            {
+              scale: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.992, 1],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]
+        : [
+            {
+              translateY: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [travel, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            {
+              scale: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.985, 1],
+                extrapolate: 'clamp',
+              }),
+            },
+          ],
+    },
+  };
+};
+
 export default function App() {
   return (
     <AuthProvider>
@@ -31,7 +91,15 @@ export default function App() {
             <StatusBar style="dark" />
           <Stack.Navigator
             initialRouteName="Login"
-            screenOptions={{ headerShown: false }}
+            screenOptions={({ route }) => ({
+              headerShown: false,
+              gestureEnabled: true,
+              transitionSpec: {
+                open: smoothScreenTransition,
+                close: smoothScreenTransition,
+              },
+              cardStyleInterpolator: createCardStyleInterpolator(route),
+            })}
           >
             <Stack.Screen name="Login"    component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />

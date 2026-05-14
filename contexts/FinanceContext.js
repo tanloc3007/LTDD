@@ -21,26 +21,18 @@ export const INCOME_CATEGORIES = [
   { id: 'income_other', label: 'Khac', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
 ];
 
-const initialTransactions = [
-  { id: 'tx-1', amount: 1500000, type: 'expense', category: 'food', note: 'An uong cuoi tuan', date: '26/04/2026' },
-  { id: 'tx-2', amount: 1350000, type: 'expense', category: 'transport', note: 'Di chuyen', date: '25/04/2026' },
-  { id: 'tx-3', amount: 900000, type: 'expense', category: 'home', note: 'Hoa don', date: '20/04/2026' },
-  { id: 'tx-4', amount: 675000, type: 'expense', category: 'other', note: 'Chi phi khac', date: '18/04/2026' },
-  { id: 'tx-5', amount: 8000000, type: 'income', category: 'salary', note: 'Luong thang', date: '15/04/2026' },
-];
-
 const FinanceContext = createContext(null);
 
 export function FinanceProvider({ children }) {
   const { token } = useAuth();
-  const [transactions, setTransactions] = useState(initialTransactions);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const fetchTransactions = async () => {
     if (!token) {
-      setTransactions(initialTransactions);
+      setTransactions([]);
       return;
     }
     setLoading(true);
@@ -60,9 +52,7 @@ export function FinanceProvider({ children }) {
 
   const addTransaction = async (transaction) => {
     if (!token) {
-      const localTransaction = { ...transaction, id: `tx-${Date.now()}` };
-      setTransactions((current) => [localTransaction, ...current]);
-      return localTransaction;
+      throw new Error('Vui long dang nhap de luu du lieu.');
     }
 
     const data = await apiRequest('/transactions', {
@@ -76,10 +66,7 @@ export function FinanceProvider({ children }) {
 
   const updateTransaction = async (id, nextTransaction) => {
     if (!token) {
-      setTransactions((current) =>
-        current.map((item) => (item.id === id ? { ...item, ...nextTransaction, id } : item))
-      );
-      return;
+      throw new Error('Vui long dang nhap de cap nhat du lieu.');
     }
 
     const data = await apiRequest(`/transactions/${id}`, {
@@ -93,12 +80,13 @@ export function FinanceProvider({ children }) {
   };
 
   const deleteTransaction = async (id) => {
-    if (token) {
-      await apiRequest(`/transactions/${id}`, {
-        method: 'DELETE',
-        headers: authHeaders,
-      });
+    if (!token) {
+      throw new Error('Vui long dang nhap de xoa du lieu.');
     }
+    await apiRequest(`/transactions/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders,
+    });
     setTransactions((current) => current.filter((item) => item.id !== id));
   };
 

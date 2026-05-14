@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -454,21 +454,6 @@ app.delete('/user/data', authRequired, async (req, res) => {
     await GlobalLimit.deleteMany({ userId });
     await Notification.deleteMany({ userId });
     
-    // Add a system note
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const year = today.getFullYear();
-    const dateStr = `${day}/${month}/${year}`;
-
-    await Transaction.create({
-      userId,
-      amount: 0,
-      type: 'expense',
-      category: 'other',
-      note: 'Đã xóa toàn bộ dữ liệu',
-      date: dateStr
-    });
 
     res.json({ ok: true, message: 'Đã xóa toàn bộ dữ liệu.' });
   } catch (error) {
