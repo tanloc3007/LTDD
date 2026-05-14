@@ -240,7 +240,7 @@ export default function StatsScreen({ navigation }) {
         <View style={styles.avatar}>
           <Ionicons name="person" size={18} color={COLORS.primary} />
         </View>
-        <Text style={styles.brand}>MoMo Finance</Text>
+        <Text style={styles.brand}>FinancialManagement Finance</Text>
         <TouchableOpacity style={styles.bell} onPress={() => setShowNotifModal(true)}>
           <Ionicons name="notifications-outline" size={20} color={COLORS.primaryDark} />
           {unreadCount > 0 && (

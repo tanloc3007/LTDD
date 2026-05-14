@@ -154,7 +154,7 @@ export default function LimitScreen({ navigation }) {
           <View style={s.logoCircle}>
             <Ionicons name="speedometer" size={18} color="#FFF" />
           </View>
-          <Text style={s.logoText}>MoMo Finance</Text>
+          <Text style={s.logoText}>FinancialManagement Finance</Text>
         </View>
         <TouchableOpacity style={s.notifBtn} onPress={() => setShowNotifModal(true)}>
           <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />

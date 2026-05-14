@@ -503,7 +503,7 @@ app.post('/ai-chat', authRequired, async (req, res) => {
     }
 
     const promptContext = `
-      Ban la mot tro ly tai chinh thong minh cua ung dung MoMo Finance.
+      Ban la mot tro ly tai chinh thong minh cua ung dung FinancialManagement Finance.
       Nguoi dung ten la ${req.user.name}.
       Du lieu tai chinh hien tai cua nguoi dung:
       - Tong giao dich: ${contextData?.totalTransactions || 0}
@@ -544,6 +544,79 @@ app.post('/ai-chat', authRequired, async (req, res) => {
   } catch (error) {
     console.error('AI Chat Error:', error);
     res.status(500).json({ message: 'Co loi xay ra khi ket noi voi AI.' });
+  }
+});
+
+// ---- AI BUDGET SUGGESTIONS ----
+app.post('/ai-budget-suggestions', authRequired, async (req, res) => {
+  try {
+    const { income, expenses, currentBudgets } = req.body;
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập trên server.' });
+    }
+
+    const prompt = `
+      Bạn là chuyên gia tư vấn tài chính cá nhân. Dựa trên dữ liệu sau của người dùng:
+      - Tổng thu nhập tháng này: ${income}
+      - Tổng chi tiêu thực tế tháng này: ${expenses}
+      - Các ngân sách đã thiết lập: ${currentBudgets || 'Chưa có'}
+
+      Hãy đưa ra 3 gợi ý ngân sách chi tiêu tối ưu cho các mục tiêu phổ biến (ví dụ: Tổng chi tiêu, Ăn uống, Mua sắm, Tiết kiệm).
+      
+      YÊU CẦU QUAN TRỌNG:
+      - Chỉ trả về duy nhất một mảng JSON hợp lệ. 
+      - Không thêm bất kỳ lời dẫn, giải thích hay ký tự markdown nào (như \`\`\`json).
+      - Mỗi đối tượng trong mảng phải có cấu trúc: {"id": "string", "label": "string", "suggestion": "string", "icon": "string", "color": "string"}
+      - Giá trị "suggestion" phải kèm đơn vị đ (ví dụ: "2.000.000đ").
+      - "icon" phải là tên icon từ Ionicons (vd: restaurant, cart, car, leaf, play-circle, receipt, book, brush, body, home, heart, wallet).
+
+      ĐỊNH DẠNG MẪU:
+      [
+        {"id": "suggest_1", "label": "Ăn uống", "suggestion": "2.000.000đ", "icon": "restaurant", "color": "#FF6B35"},
+        ...
+      ]
+    `;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 800,
+        temperature: 0.2
+      })
+    });
+
+    if (!response.ok) return res.status(500).json({ message: 'Lỗi API AI.' });
+
+    const data = await response.json();
+    let text = data.choices[0].message.content.trim();
+    
+    // Extract JSON array using a more robust approach
+    const startBracket = text.indexOf('[');
+    const endBracket = text.lastIndexOf(']');
+    
+    if (startBracket !== -1 && endBracket !== -1 && startBracket < endBracket) {
+      text = text.substring(startBracket, endBracket + 1);
+    }
+
+    try {
+      const suggestions = JSON.parse(text);
+      res.json({ suggestions });
+    } catch (e) {
+      console.error('Parse AI JSON failed. Text received:', text);
+      res.status(500).json({ message: 'AI trả về định dạng không hợp lệ.' });
+    }
+  } catch (error) {
+    console.error('AI Suggestion Error:', error);
+    res.status(500).json({ message: 'Có lỗi xảy ra.' });
   }
 });
 
