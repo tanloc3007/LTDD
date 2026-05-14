@@ -15,6 +15,7 @@ import AIChatScreen from './screens/AIChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import CreateBudgetScreen from './screens/CreateBudgetScreen.js';
 import SetBudgetAmountScreen from './screens/SetBudgetAmountScreen.js';
+import AddCategoryScreen from './screens/AddCategoryScreen.js';
 import { AuthProvider } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
 import { SettingsProvider } from './contexts/SettingsContext';
@@ -43,6 +44,7 @@ export default function App() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
             <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
+            <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
           </Stack.Navigator>
           </NavigationContainer>
         </SettingsProvider>

@@ -223,7 +223,7 @@ export default function ProfileScreen({ navigation }) {
   const handleBackup = async () => {
     try {
       const data = await apiRequest('/user/export', { headers: authHeaders });
-      const fileUri = FileSystem.documentDirectory + 'momo_finance_backup.json';
+      const fileUri = FileSystem.documentDirectory + 'financial_management_backup.json';
       await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(data));
       await Sharing.shareAsync(fileUri);
     } catch (err) {

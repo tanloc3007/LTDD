@@ -67,11 +67,23 @@ const globalLimitSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const categorySchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    label: { type: String, required: true },
+    icon: { type: String, default: 'apps' },
+    color: { type: String, default: '#8892A4' },
+    type: { type: String, enum: ['expense', 'income'], default: 'expense' },
+  },
+  { timestamps: true }
+);
+
 const User = mongoose.model('User', userSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const BudgetCategory = mongoose.model('BudgetCategory', budgetCategorySchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 const GlobalLimit = mongoose.model('GlobalLimit', globalLimitSchema);
+const Category = mongoose.model('Category', categorySchema);
 
 function createToken(user) {
   return jwt.sign({ userId: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
@@ -367,6 +379,30 @@ app.post('/notifications/read-all', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- CATEGORIES ----
+app.get('/categories', authRequired, async (req, res) => {
+  const categories = await Category.find({ userId: req.user._id }).sort({ createdAt: 1 });
+  res.json({ categories });
+});
+
+app.post('/categories', authRequired, async (req, res) => {
+  try {
+    const { label, icon, color, type } = req.body;
+    if (!label) return res.status(400).json({ message: 'Tên danh mục không được để trống.' });
+    
+    const category = await Category.create({
+      userId: req.user._id,
+      label,
+      icon: icon || 'apps',
+      color: color || '#8892A4',
+      type: type || 'expense',
+    });
+    res.status(201).json({ category });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể tạo danh mục.' });
+  }
+});
+
 // ---- USER PROFILE & SETTINGS ----
 app.put('/user/profile', authRequired, async (req, res) => {
   try {
@@ -558,26 +594,32 @@ app.post('/ai-budget-suggestions', authRequired, async (req, res) => {
       return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập trên server.' });
     }
 
-    const prompt = `
-      Bạn là chuyên gia tư vấn tài chính cá nhân. Dựa trên dữ liệu sau của người dùng:
-      - Tổng thu nhập tháng này: ${income}
-      - Tổng chi tiêu thực tế tháng này: ${expenses}
-      - Các ngân sách đã thiết lập: ${currentBudgets || 'Chưa có'}
-
-      Hãy đưa ra 3 gợi ý ngân sách chi tiêu tối ưu cho các mục tiêu phổ biến (ví dụ: Tổng chi tiêu, Ăn uống, Mua sắm, Tiết kiệm).
+    const systemPrompt = `
+      Bạn là chuyên gia tư vấn tài chính cá nhân. Nhiệm vụ của bạn là đưa ra gợi ý ngân sách chi tiêu.
+      CHỈ TRẢ VỀ DỮ LIỆU DƯỚI DẠNG MẢNG JSON. TUYỆT ĐỐI KHÔNG GIẢI THÍCH, KHÔNG CHÀO HỎI.
       
-      YÊU CẦU QUAN TRỌNG:
-      - Chỉ trả về duy nhất một mảng JSON hợp lệ. 
-      - Không thêm bất kỳ lời dẫn, giải thích hay ký tự markdown nào (như \`\`\`json).
-      - Mỗi đối tượng trong mảng phải có cấu trúc: {"id": "string", "label": "string", "suggestion": "string", "icon": "string", "color": "string"}
-      - Giá trị "suggestion" phải kèm đơn vị đ (ví dụ: "2.000.000đ").
-      - "icon" phải là tên icon từ Ionicons (vd: restaurant, cart, car, leaf, play-circle, receipt, book, brush, body, home, heart, wallet).
-
-      ĐỊNH DẠNG MẪU:
+      Định dạng mảng JSON:
       [
         {"id": "suggest_1", "label": "Ăn uống", "suggestion": "2.000.000đ", "icon": "restaurant", "color": "#FF6B35"},
-        ...
+        {"id": "suggest_2", "label": "Mua sắm", "suggestion": "1.500.000đ", "icon": "cart", "color": "#FF9500"},
+        {"id": "suggest_3", "label": "Di chuyển", "suggestion": "1.000.000đ", "icon": "car", "color": "#178BFF"}
       ]
+      
+      Quy tắc:
+      - "id" là duy nhất.
+      - "label" là tên danh mục.
+      - "suggestion" là số tiền kèm đ (vd: 500.000đ).
+      - "icon" là tên icon từ Ionicons (restaurant, cart, car, leaf, play-circle, receipt, book, brush, body, home, heart, wallet).
+      - "color" là mã màu HEX.
+    `;
+
+    const userPrompt = `
+      Dữ liệu người dùng:
+      - Thu nhập: ${income}
+      - Chi tiêu: ${expenses}
+      - Ngân sách hiện tại: ${currentBudgets || 'Chưa có'}
+      
+      Hãy gợi ý 3 mục ngân sách phù hợp nhất. Chỉ trả về JSON.
     `;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -588,9 +630,12 @@ app.post('/ai-budget-suggestions', authRequired, async (req, res) => {
       },
       body: JSON.stringify({
         model: model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 800,
-        temperature: 0.2
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 500,
+        temperature: 0
       })
     });
 
@@ -599,7 +644,7 @@ app.post('/ai-budget-suggestions', authRequired, async (req, res) => {
     const data = await response.json();
     let text = data.choices[0].message.content.trim();
     
-    // Extract JSON array using a more robust approach
+    // Extract JSON array
     const startBracket = text.indexOf('[');
     const endBracket = text.lastIndexOf(']');
     

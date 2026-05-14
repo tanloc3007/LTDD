@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -9,13 +9,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance, formatVnd } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
 
-const UI_CATEGORIES = [
+const STATIC_CATEGORIES = [
     { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
     { id: 'investment', label: 'Đầu tư', icon: 'leaf', color: '#2DCE89' },
     { id: 'entertainment', label: 'Giải trí', icon: 'play-circle', color: '#F5365C' },
@@ -37,7 +38,33 @@ export default function CreateBudgetScreen({ navigation, route }) {
   const s = useMemo(() => getStyles(COLORS), [COLORS]);
 
   const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [customCategories, setCustomCategories] = useState([]);
   const [loadingAi, setLoadingAi] = useState(true);
+
+  const fetchCustomCategories = async () => {
+    if (!token) return;
+    try {
+      const res = await apiRequest('/categories', { headers: { Authorization: `Bearer ${token}` } });
+      setCustomCategories(res.categories || []);
+    } catch (_) {}
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCustomCategories();
+    }, [token])
+  );
+
+  const allCategories = useMemo(() => {
+    const custom = customCategories.map(c => ({
+        id: c._id,
+        label: c.label,
+        icon: c.icon,
+        color: c.color,
+        isCustom: true
+    }));
+    return [...STATIC_CATEGORIES, ...custom];
+  }, [customCategories]);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -79,8 +106,7 @@ export default function CreateBudgetScreen({ navigation, route }) {
   };
 
   const handleSelectSuggestion = (sug) => {
-      // Find matching category from UI_CATEGORIES or create a temporary one
-      const cat = UI_CATEGORIES.find(c => c.label === sug.label) || {
+      const cat = allCategories.find(c => c.label === sug.label) || {
           id: sug.id,
           label: sug.label,
           icon: sug.icon || 'star',
@@ -145,7 +171,7 @@ export default function CreateBudgetScreen({ navigation, route }) {
         {/* OTHER CATEGORIES */}
         <Text style={s.sectionTitle}>Chọn danh mục khác</Text>
         <View style={s.catList}>
-            {UI_CATEGORIES.map((cat) => {
+            {allCategories.map((cat) => {
                 const isCreated = existingBudgets.some(b => b.categoryId === cat.id);
                 return (
                     <TouchableOpacity 
@@ -172,7 +198,10 @@ export default function CreateBudgetScreen({ navigation, route }) {
             })}
         </View>
 
-        <TouchableOpacity style={s.addMoreBtn}>
+        <TouchableOpacity 
+          style={s.addMoreBtn} 
+          onPress={() => navigation.navigate('AddCategory')}
+        >
             <Ionicons name="add" size={24} color={COLORS.primary} />
             <Text style={s.addMoreText}>Thêm danh mục</Text>
         </TouchableOpacity>
