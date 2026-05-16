@@ -1,34 +1,39 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
-import { lightColors, darkColors } from '../constants/theme';
+import React, { createContext, useContext, useMemo, useState } from 'react';
+import { accentOptions, buildThemeColors } from '../constants/theme';
 
 const SettingsContext = createContext(null);
 
 export function SettingsProvider({ children }) {
   const [theme, setTheme] = useState('light'); // 'light' or 'dark'
   const [currency, setCurrency] = useState('VND'); // 'VND' or 'USD'
+  const [accent, setAccent] = useState('pink');
 
-  const colors = theme === 'dark' ? darkColors : lightColors;
+  const colors = buildThemeColors(theme, accent);
 
   const formatCurrency = (amount) => {
     const val = Number(amount || 0);
     if (currency === 'USD') {
-      return `$${(val / 25000).toFixed(2)}`; // Giả lập tỷ giá 25000 VND = 1 USD
+      return `$${(val / 25000).toFixed(2)}`;
     }
     return `${val.toLocaleString('vi-VN')} đ`;
   };
 
-  const value = useMemo(() => ({
-    theme, setTheme,
-    currency, setCurrency,
-    colors,
-    formatCurrency
-  }), [theme, currency, colors]);
-
-  return (
-    <SettingsContext.Provider value={value}>
-      {children}
-    </SettingsContext.Provider>
+  const value = useMemo(
+    () => ({
+      theme,
+      setTheme,
+      currency,
+      setCurrency,
+      accent,
+      setAccent,
+      accentOptions,
+      colors,
+      formatCurrency,
+    }),
+    [theme, currency, accent, colors]
   );
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings() {

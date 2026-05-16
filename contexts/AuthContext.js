@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { apiRequest } from '../constants/api';
 
 const AuthContext = createContext(null);
@@ -27,13 +28,32 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const logout = () => {
+  const socialLogin = async (provider, idToken, userInfo = {}) => {
+    const data = await apiRequest('/auth/social-login', {
+      method: 'POST',
+      body: JSON.stringify({ provider, token: idToken, ...userInfo }),
+    });
+    setUser(data.user);
+    setToken(data.token);
+    return data.user;
+  };
+
+  const logout = async () => {
+    try {
+      const hasPreviousSignIn = GoogleSignin.hasPreviousSignIn();
+      if (hasPreviousSignIn) {
+        await GoogleSignin.signOut();
+      }
+    } catch (error) {
+      // Keep local logout working even if the Google session cannot be cleared.
+    }
+
     setUser(null);
     setToken(null);
   };
 
   const value = useMemo(
-    () => ({ user, token, setUser, login, register, logout }),
+    () => ({ user, token, setUser, login, register, socialLogin, logout }),
     [user, token]
   );
 

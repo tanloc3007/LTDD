@@ -1,13 +1,13 @@
-import 'react-native-gesture-handler'; // phải là dòng đầu tiên
+import 'react-native-gesture-handler';
 import React from 'react';
 import { Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 
-import LoginScreen    from './screens/LoginScreen';
+import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import HomeScreen     from './screens/HomeScreen';
+import HomeScreen from './screens/HomeScreen';
 import TransactionScreen from './screens/TransactionScreen';
 import StatsScreen from './screens/StatsScreen';
 import BudgetScreen from './screens/BudgetScreen';
@@ -19,7 +19,7 @@ import SetBudgetAmountScreen from './screens/SetBudgetAmountScreen.js';
 import AddCategoryScreen from './screens/AddCategoryScreen.js';
 import { AuthProvider } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
-import { SettingsProvider } from './contexts/SettingsContext';
+import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
 const Stack = createStackNavigator();
 
@@ -82,39 +82,48 @@ const createCardStyleInterpolator = (route) => ({ current, layouts }) => {
   };
 };
 
+function AppNavigation() {
+  const { theme, colors } = useSettings();
+
+  return (
+    <NavigationContainer>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
+      <Stack.Navigator
+        initialRouteName="Login"
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          gestureEnabled: true,
+          transitionSpec: {
+            open: smoothScreenTransition,
+            close: smoothScreenTransition,
+          },
+          cardStyle: { backgroundColor: colors.bg },
+          cardStyleInterpolator: createCardStyleInterpolator(route),
+        })}
+      >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Register" component={RegisterScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Transaction" component={TransactionScreen} />
+        <Stack.Screen name="Stats" component={StatsScreen} />
+        <Stack.Screen name="Budget" component={BudgetScreen} />
+        <Stack.Screen name="Limit" component={LimitScreen} />
+        <Stack.Screen name="AIChat" component={AIChatScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
+        <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
+        <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <FinanceProvider>
         <SettingsProvider>
-          <NavigationContainer>
-            <StatusBar style="dark" />
-          <Stack.Navigator
-            initialRouteName="Login"
-            screenOptions={({ route }) => ({
-              headerShown: false,
-              gestureEnabled: true,
-              transitionSpec: {
-                open: smoothScreenTransition,
-                close: smoothScreenTransition,
-              },
-              cardStyleInterpolator: createCardStyleInterpolator(route),
-            })}
-          >
-            <Stack.Screen name="Login"    component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Home"     component={HomeScreen} />
-            <Stack.Screen name="Transaction" component={TransactionScreen} />
-            <Stack.Screen name="Stats" component={StatsScreen} />
-            <Stack.Screen name="Budget" component={BudgetScreen} />
-            <Stack.Screen name="Limit" component={LimitScreen} />
-            <Stack.Screen name="AIChat" component={AIChatScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
-            <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
-            <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
-          </Stack.Navigator>
-          </NavigationContainer>
+          <AppNavigation />
         </SettingsProvider>
       </FinanceProvider>
     </AuthProvider>

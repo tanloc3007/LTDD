@@ -1,24 +1,40 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { v2: cloudinary } = require('cloudinary');
 require('dotenv').config({ path: __dirname + '/.env' });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
+const CLOUDINARY_AVATAR_FOLDER = process.env.CLOUDINARY_AVATAR_FOLDER || 'financial-management/avatars';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+
+cloudinary.config({
+  cloud_name: CLOUDINARY_CLOUD_NAME,
+  api_key: CLOUDINARY_API_KEY,
+  api_secret: CLOUDINARY_API_SECRET,
+});
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    phone: { type: String, required: true, trim: true },
-    passwordHash: { type: String, required: true },
+    name:         { type: String, required: true, trim: true },
+    email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
+    phone:        { type: String, default: '', trim: true },
+    passwordHash: { type: String, default: null },
+    // Social login
+    provider:     { type: String, enum: ['local', 'google', 'facebook'], default: 'local' },
+    providerId:   { type: String, default: null },
+    avatar:       { type: String, default: null },
+    avatarPublicId: { type: String, default: null },
   },
   { timestamps: true }
 );
@@ -91,10 +107,12 @@ function createToken(user) {
 
 function sanitizeUser(user) {
   return {
-    id: user._id.toString(),
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
+    id:       user._id.toString(),
+    name:     user.name,
+    email:    user.email,
+    phone:    user.phone || '',
+    avatar:   user.avatar || null,
+    provider: user.provider || 'local',
   };
 }
 
@@ -107,6 +125,65 @@ function mapTransaction(transaction) {
     note: transaction.note,
     date: transaction.date,
   };
+}
+
+function isCloudinaryConfigured() {
+  return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
+}
+
+async function uploadAvatarToCloudinary({ avatarBase64, avatarMimeType, userId }) {
+  if (!isCloudinaryConfigured()) {
+    throw new Error('Cloudinary is not configured.');
+  }
+
+  const mimeType = avatarMimeType || 'image/jpeg';
+  const uploadResult = await cloudinary.uploader.upload(`data:${mimeType};base64,${avatarBase64}`, {
+    folder: CLOUDINARY_AVATAR_FOLDER,
+    resource_type: 'image',
+    overwrite: false,
+    public_id: `avatar_${userId}_${Date.now()}`,
+  });
+
+  return {
+    secureUrl: uploadResult.secure_url,
+    publicId: uploadResult.public_id,
+  };
+}
+
+function extractCloudinaryPublicIdFromUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (!url.includes('res.cloudinary.com')) return null;
+
+  const uploadMarker = '/upload/';
+  const markerIndex = url.indexOf(uploadMarker);
+  if (markerIndex === -1) return null;
+
+  let publicPath = url.slice(markerIndex + uploadMarker.length);
+  publicPath = publicPath.replace(/^v\d+\//, '');
+  publicPath = publicPath.replace(/\.[^/.]+$/, '');
+
+  return publicPath || null;
+}
+
+async function deleteAvatarFromCloudinary(publicIdOrUrl) {
+  const publicId =
+    typeof publicIdOrUrl === 'string' && !publicIdOrUrl.includes('res.cloudinary.com')
+      ? publicIdOrUrl
+      : extractCloudinaryPublicIdFromUrl(publicIdOrUrl);
+  if (!publicId || !isCloudinaryConfigured()) return;
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'image',
+      invalidate: true,
+    });
+
+    if (result.result !== 'ok' && result.result !== 'not found') {
+      console.warn('Unexpected Cloudinary delete result:', publicId, result);
+    }
+  } catch (error) {
+    console.error('Delete old avatar error:', error);
+  }
 }
 
 async function authRequired(req, res, next) {
@@ -175,6 +252,88 @@ app.post('/auth/login', async (req, res) => {
     return res.json({ user: sanitizeUser(user), token: createToken(user) });
   } catch (error) {
     return res.status(500).json({ message: 'Không thể đăng nhập.' });
+  }
+});
+
+// ---- SOCIAL LOGIN (Google / Facebook) ----
+const GOOGLE_WEB_CLIENT_ID = '769715173800-apeqnirv8pi0c26j709o0d973tim15on.apps.googleusercontent.com';
+
+app.post('/auth/social-login', async (req, res) => {
+  try {
+    const { provider, token, name, email, avatar } = req.body;
+    if (!provider || !token) {
+      return res.status(400).json({ message: 'Thiếu thông tin đăng nhập.' });
+    }
+
+    let verifiedEmail = email;
+    let verifiedName  = name;
+    let providerId    = null;
+    let verifiedAvatar = avatar || null;
+
+    if (provider === 'google') {
+      // Xác thực idToken với Google
+      const gRes  = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+      const gData = await gRes.json();
+
+      if (!gRes.ok || gData.error) {
+        return res.status(401).json({ message: 'Token Google không hợp lệ.' });
+      }
+      // Kiểm tra audience khớp với Web Client ID
+      if (gData.aud !== GOOGLE_WEB_CLIENT_ID) {
+        return res.status(401).json({ message: 'Token không đúng ứng dụng.' });
+      }
+
+      verifiedEmail = gData.email;
+      verifiedName  = gData.name || name;
+      providerId    = gData.sub;
+    } else if (provider === 'facebook') {
+      const fbRes = await fetch(
+        `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(token)}`
+      );
+      const fbData = await fbRes.json();
+
+      if (!fbRes.ok || fbData.error) {
+        return res.status(401).json({ message: 'Token Facebook khong hop le.' });
+      }
+
+      verifiedEmail = fbData.email || email;
+      verifiedName  = fbData.name || name;
+      providerId    = fbData.id;
+      verifiedAvatar = fbData.picture?.data?.url || avatar || null;
+    } else {
+      return res.status(400).json({ message: 'Provider không được hỗ trợ.' });
+    }
+
+    if (!verifiedEmail) {
+      return res.status(400).json({ message: 'Không lấy được email từ tài khoản mạng xã hội.' });
+    }
+
+    // Tìm user theo email
+    let user = await User.findOne({ email: verifiedEmail.toLowerCase().trim() });
+
+    if (!user) {
+      // Tạo user mới (không có password)
+      user = await User.create({
+        name:     verifiedName || verifiedEmail.split('@')[0],
+        email:    verifiedEmail.toLowerCase().trim(),
+        phone:    '',
+        passwordHash: null,
+        provider,
+        providerId,
+        avatar:   verifiedAvatar,
+      });
+    } else {
+      // User đã tồn tại (có thể đăng ký bằng email trước) → cập nhật avatar nếu chưa có
+      if (verifiedAvatar && !user.avatar) {
+        user.avatar = verifiedAvatar;
+        await user.save();
+      }
+    }
+
+    return res.json({ user: sanitizeUser(user), token: createToken(user) });
+  } catch (error) {
+    console.error('Social login error:', error);
+    return res.status(500).json({ message: 'Không thể đăng nhập bằng mạng xã hội.' });
   }
 });
 
@@ -406,17 +565,40 @@ app.post('/categories', authRequired, async (req, res) => {
 // ---- USER PROFILE & SETTINGS ----
 app.put('/user/profile', authRequired, async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name || !name.trim()) {
+    const { name, avatarBase64, avatarMimeType } = req.body || {};
+    const update = {};
+    const previousAvatar = req.user.avatar || null;
+    const previousAvatarPublicId =
+      req.user.avatarPublicId || extractCloudinaryPublicIdFromUrl(previousAvatar);
+    if (typeof name === 'string' && !name.trim()) {
       return res.status(400).json({ message: 'Tên không được để trống.' });
+    }
+    if (typeof name === 'string' && name.trim()) {
+      update.name = name.trim();
+    }
+    if (avatarBase64) {
+      const uploadedAvatar = await uploadAvatarToCloudinary({
+        avatarBase64,
+        avatarMimeType,
+        userId: req.user._id.toString(),
+      });
+      update.avatar = uploadedAvatar.secureUrl;
+      update.avatarPublicId = uploadedAvatar.publicId;
+    }
+    if (!Object.keys(update).length) {
+      return res.status(400).json({ message: 'Khong co thong tin nao de cap nhat.' });
     }
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { name: name.trim() },
+      update,
       { new: true }
     );
+    if (avatarBase64 && previousAvatar && previousAvatar !== user.avatar) {
+      await deleteAvatarFromCloudinary(previousAvatarPublicId || previousAvatar);
+    }
     res.json({ user: sanitizeUser(user) });
   } catch (error) {
+    console.error('Update profile error:', error);
     res.status(500).json({ message: 'Không thể cập nhật hồ sơ.' });
   }
 });

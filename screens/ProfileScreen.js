@@ -11,6 +11,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import AppBottomNav from '../components/AppBottomNav';
 
 const FONTS = {
@@ -32,7 +33,7 @@ const SIZES = {
 export default function ProfileScreen({ navigation }) {
   const { user, token, logout, setUser } = useAuth();
   const { fetchTransactions } = useFinance();
-  const { colors: COLORS, theme, setTheme, currency, setCurrency, formatCurrency } = useSettings();
+  const { colors: COLORS, theme, setTheme, currency, setCurrency, formatCurrency, accent, setAccent, accentOptions } = useSettings();
   const styles = useMemo(() => getStyles(COLORS), [COLORS]);
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -43,6 +44,7 @@ export default function ProfileScreen({ navigation }) {
   const [showPassModal, setShowPassModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showAccentModal, setShowAccentModal] = useState(false);
   const [showRateModal, setShowRateModal] = useState(false);
   
   // App Rating
@@ -51,6 +53,7 @@ export default function ProfileScreen({ navigation }) {
   // Loading flags
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
 
   // Edit Profile States
   const [editName, setEditName] = useState(user?.name || '');
@@ -60,6 +63,7 @@ export default function ProfileScreen({ navigation }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [savingPass, setSavingPass] = useState(false);
+  const avatarUri = user?.avatar || ('https://i.pravatar.cc/150?u=' + encodeURIComponent(user?.email || user?.id || 'user'));
 
   useFocusEffect(
     React.useCallback(() => {
@@ -102,6 +106,51 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert('Lỗi', error.message);
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Cần quyền truy cập', 'Hãy cho phép ứng dụng truy cập thư viện ảnh để đổi ảnh đại diện.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setSavingAvatar(true);
+
+      const avatarBase64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const res = await apiRequest('/user/profile', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({
+          ...(user?.name?.trim() ? { name: user.name.trim() } : {}),
+          avatarBase64,
+          avatarMimeType: asset.mimeType || 'image/jpeg',
+        }),
+      });
+
+      setUser(res.user);
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện.');
+    } catch (error) {
+      Alert.alert('Lỗi', error.message || 'Không thể cập nhật ảnh đại diện.');
+    } finally {
+      setSavingAvatar(false);
     }
   };
 
@@ -271,8 +320,8 @@ export default function ProfileScreen({ navigation }) {
       { 
         text: 'Đăng xuất', 
         style: 'destructive', 
-        onPress: () => {
-          logout();
+        onPress: async () => {
+          await logout();
           navigation.reset({
             index: 0,
             routes: [{ name: 'Login' }],
@@ -299,12 +348,20 @@ export default function ProfileScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
+          <TouchableOpacity style={styles.avatarWrap} onPress={handlePickAvatar} activeOpacity={0.85} disabled={savingAvatar}>
             <Image 
-              source={{ uri: 'https://i.pravatar.cc/150?u=' + encodeURIComponent(user?.email || user?.id || 'user') }} 
+              source={{ uri: avatarUri }} 
               style={styles.avatar}
             />
-          </View>
+            <View style={styles.avatarEditBadge}>
+              {savingAvatar ? (
+                <ActivityIndicator size="small" color={COLORS.white} />
+              ) : (
+                <Ionicons name="camera" size={14} color={COLORS.white} />
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.avatarHint}>Chạm vào ảnh để thay đổi avatar</Text>
           <Text style={styles.userName}>{user?.name || 'Nguoi dung'}</Text>
           <Text style={styles.userEmail}>{user?.email || ''}</Text>
           <TouchableOpacity 
@@ -334,6 +391,11 @@ export default function ProfileScreen({ navigation }) {
             COLORS={COLORS} icon="color-palette" iconColor={COLORS.primary} 
             label="Giao diện" value={theme === 'light' ? 'Sáng' : 'Tối'} 
             onPress={() => setShowThemeModal(true)} 
+          />
+          <SettingItem 
+            COLORS={COLORS} icon="color-filter" iconColor={COLORS.primary} 
+            label="Màu chủ đạo" value={accentOptions.find((item) => item.key === accent)?.label || 'Hồng'} 
+            onPress={() => setShowAccentModal(true)} 
           />
           <SettingItem 
             COLORS={COLORS} icon="wallet" iconColor={COLORS.primary} 
@@ -410,6 +472,31 @@ export default function ProfileScreen({ navigation }) {
               {theme === 'dark' && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalBtnCancelFull} onPress={() => setShowThemeModal(false)}>
+              <Text style={styles.modalBtnCancelText}>Hủy</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Accent Modal */}
+      <Modal visible={showAccentModal} animationType="fade" transparent onRequestClose={() => setShowAccentModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Chọn màu chủ đạo</Text>
+            {accentOptions.map((option, index) => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.modalActionRow, index === accentOptions.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => { setAccent(option.key); setShowAccentModal(false); }}
+              >
+                <View style={styles.accentOptionInfo}>
+                  <View style={[styles.accentSwatch, { backgroundColor: option.preview }]} />
+                  <Text style={styles.modalActionText}>{option.label}</Text>
+                </View>
+                {accent === option.key && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalBtnCancelFull} onPress={() => setShowAccentModal(false)}>
               <Text style={styles.modalBtnCancelText}>Hủy</Text>
             </TouchableOpacity>
           </View>
@@ -626,10 +713,25 @@ const getStyles = (COLORS) => StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     padding: 4,
     marginBottom: 12,
+    position: 'relative',
   },
   avatar: {
     width: '100%', height: '100%', borderRadius: 36,
   },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarHint: { fontSize: SIZES.xs, color: COLORS.gray, marginBottom: 8 },
   userName: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark, marginBottom: 4 },
   userEmail: { fontSize: SIZES.sm, color: COLORS.gray, marginBottom: 16 },
   editBtn: {
@@ -706,6 +808,8 @@ const getStyles = (COLORS) => StyleSheet.create({
   modalActionRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   modalActionText: { fontSize: SIZES.base, color: COLORS.dark },
   modalBtnCancelFull: { marginTop: 16, height: 48, borderRadius: 8, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center' },
+  accentOptionInfo: { flexDirection: 'row', alignItems: 'center' },
+  accentSwatch: { width: 20, height: 20, borderRadius: 10, marginRight: 12, borderWidth: 2, borderColor: COLORS.white },
 
   // Sheet Modal (Notifications)
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },

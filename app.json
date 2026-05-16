@@ -29,7 +29,21 @@
       "bundler": "metro"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép ứng dụng truy cập ảnh để cập nhật ảnh đại diện.",
+          "cameraPermission": "Cho phép ứng dụng dùng camera để chụp ảnh đại diện."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "eee2430c-08be-4271-8bfd-2e853ece6629"
+      }
+    },
+    "owner": "deafhighping"
   }
 }
