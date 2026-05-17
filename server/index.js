@@ -10,12 +10,36 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_WEB_CLIENT_ID || '';
 const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
 const CLOUDINARY_AVATAR_FOLDER = process.env.CLOUDINARY_AVATAR_FOLDER || 'financial-management/avatars';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
 
-app.use(cors());
+function buildCorsOptions() {
+  if (!CORS_ORIGIN.trim()) {
+    return { origin: true, credentials: true };
+  }
+
+  const allowedOrigins = CORS_ORIGIN
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return {
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  };
+}
+
+app.use(cors(buildCorsOptions()));
 app.use(express.json({ limit: '15mb' }));
 
 cloudinary.config({
@@ -256,7 +280,6 @@ app.post('/auth/login', async (req, res) => {
 });
 
 // ---- SOCIAL LOGIN (Google / Facebook) ----
-const GOOGLE_WEB_CLIENT_ID = '769715173800-apeqnirv8pi0c26j709o0d973tim15on.apps.googleusercontent.com';
 
 app.post('/auth/social-login', async (req, res) => {
   try {
@@ -271,6 +294,9 @@ app.post('/auth/social-login', async (req, res) => {
     let verifiedAvatar = avatar || null;
 
     if (provider === 'google') {
+      if (!GOOGLE_WEB_CLIENT_ID) {
+        return res.status(500).json({ message: 'Google sign-in is not configured.' });
+      }
       // Xác thực idToken với Google
       const gRes  = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
       const gData = await gRes.json();
@@ -841,7 +867,7 @@ app.delete('/notifications/:id', authRequired, async (req, res) => {
 
 async function start() {
   if (!MONGODB_URI) {
-    throw new Error('Missing MONGODB_URI in server/.env');
+    throw new Error('Missing MONGODB_URI environment variable.');
   }
 
   await mongoose.connect(MONGODB_URI);
