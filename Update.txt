@@ -1,0 +1,5 @@
+Cụm 1: AI Camera OCR (Chụp ảnh hóa đơn, tự động nhận diện số tiền, cửa hàng, ngày và phân loại danh mục bằng Gemini API - Hàm lượng AI cao).
+Cụm 2: Chẩn đoán sức khỏe tài chính & Dự báo (Chấm điểm tài chính 300-850, dự báo chi tiêu tương lai và xuất báo cáo PDF chuyên nghiệp).
+Cụm 3: Hũ tiết kiệm & Thử thách chi tiêu (Mô hình Trò chơi hóa - Gamification để giữ chân người dùng).
+Cụm 4: Ví nhóm đa người dùng & Quét mã VietQR (Lưu trữ ví chung thời gian thực và sinh mã QR chuyển khoản chính xác số tiền cần trả nợ - Tính thực tiễn cao).
+Cụm 5: Bảo mật sinh trắc học (FaceID/Fingerprint) & Tự động ghi nhận giao dịch định kỳ.
