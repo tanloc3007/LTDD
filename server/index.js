@@ -9,9 +9,49 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+<<<<<<< Updated upstream
 
 app.use(cors());
 app.use(express.json());
+=======
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_WEB_CLIENT_ID || '';
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
+const CLOUDINARY_AVATAR_FOLDER = process.env.CLOUDINARY_AVATAR_FOLDER || 'financial-management/avatars';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
+
+function buildCorsOptions() {
+  if (!CORS_ORIGIN.trim()) {
+    return { origin: true, credentials: true };
+  }
+
+  const allowedOrigins = CORS_ORIGIN
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return {
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  };
+}
+
+app.use(cors(buildCorsOptions()));
+app.use(express.json({ limit: '15mb' }));
+
+cloudinary.config({
+  cloud_name: CLOUDINARY_CLOUD_NAME,
+  api_key: CLOUDINARY_API_KEY,
+  api_secret: CLOUDINARY_API_SECRET,
+});
+>>>>>>> Stashed changes
 
 const userSchema = new mongoose.Schema(
   {
@@ -166,6 +206,93 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
+<<<<<<< Updated upstream
+=======
+// ---- SOCIAL LOGIN (Google / Facebook) ----
+
+app.post('/auth/social-login', async (req, res) => {
+  try {
+    const { provider, token, name, email, avatar } = req.body;
+    if (!provider || !token) {
+      return res.status(400).json({ message: 'Thiếu thông tin đăng nhập.' });
+    }
+
+    let verifiedEmail = email;
+    let verifiedName  = name;
+    let providerId    = null;
+    let verifiedAvatar = avatar || null;
+
+    if (provider === 'google') {
+      if (!GOOGLE_WEB_CLIENT_ID) {
+        return res.status(500).json({ message: 'Google sign-in is not configured.' });
+      }
+      // Xác thực idToken với Google
+      const gRes  = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+      const gData = await gRes.json();
+
+      if (!gRes.ok || gData.error) {
+        return res.status(401).json({ message: 'Token Google không hợp lệ.' });
+      }
+      // Kiểm tra audience khớp với Web Client ID
+      if (gData.aud !== GOOGLE_WEB_CLIENT_ID) {
+        return res.status(401).json({ message: 'Token không đúng ứng dụng.' });
+      }
+
+      verifiedEmail = gData.email;
+      verifiedName  = gData.name || name;
+      providerId    = gData.sub;
+    } else if (provider === 'facebook') {
+      const fbRes = await fetch(
+        `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(token)}`
+      );
+      const fbData = await fbRes.json();
+
+      if (!fbRes.ok || fbData.error) {
+        return res.status(401).json({ message: 'Token Facebook khong hop le.' });
+      }
+
+      verifiedEmail = fbData.email || email;
+      verifiedName  = fbData.name || name;
+      providerId    = fbData.id;
+      verifiedAvatar = fbData.picture?.data?.url || avatar || null;
+    } else {
+      return res.status(400).json({ message: 'Provider không được hỗ trợ.' });
+    }
+
+    if (!verifiedEmail) {
+      return res.status(400).json({ message: 'Không lấy được email từ tài khoản mạng xã hội.' });
+    }
+
+    // Tìm user theo email
+    let user = await User.findOne({ email: verifiedEmail.toLowerCase().trim() });
+
+    if (!user) {
+      // Tạo user mới (không có password)
+      user = await User.create({
+        name:     verifiedName || verifiedEmail.split('@')[0],
+        email:    verifiedEmail.toLowerCase().trim(),
+        phone:    '',
+        passwordHash: null,
+        provider,
+        providerId,
+        avatar:   verifiedAvatar,
+      });
+    } else {
+      // User đã tồn tại (có thể đăng ký bằng email trước) → cập nhật avatar nếu chưa có
+      if (verifiedAvatar && !user.avatar) {
+        user.avatar = verifiedAvatar;
+        await user.save();
+      }
+    }
+
+    return res.json({ user: sanitizeUser(user), token: createToken(user) });
+  } catch (error) {
+    console.error('Social login error:', error);
+    return res.status(500).json({ message: 'Không thể đăng nhập bằng mạng xã hội.' });
+  }
+});
+
+>>>>>>> Stashed changes
 app.get('/transactions', authRequired, async (req, res) => {
   const transactions = await Transaction.find({ userId: req.user._id }).sort({ createdAt: -1 });
   res.json({ transactions: transactions.map(mapTransaction) });
@@ -556,7 +683,7 @@ app.delete('/notifications/:id', authRequired, async (req, res) => {
 
 async function start() {
   if (!MONGODB_URI) {
-    throw new Error('Missing MONGODB_URI in server/.env');
+    throw new Error('Missing MONGODB_URI environment variable.');
   }
 
   await mongoose.connect(MONGODB_URI);
