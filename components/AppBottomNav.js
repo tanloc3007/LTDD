@@ -8,6 +8,7 @@ export const APP_TABS = [
   { id: 'home', label: 'Trang chu', icon: 'home', route: 'Home' },
   { id: 'history', label: 'Giao dich', icon: 'list', route: 'Transaction' },
   { id: 'stats', label: 'Thong ke', icon: 'bar-chart', route: 'Stats' },
+  { id: 'saving', label: 'Tiet kiem', icon: 'save', route: 'SavingGoal' },
   { id: 'wallet', label: 'Ngan sach', icon: 'wallet', route: 'Budget' },
   { id: 'profile', label: 'Ca nhan', icon: 'person', route: 'Profile' },
 ];

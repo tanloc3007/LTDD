@@ -17,6 +17,12 @@ import ProfileScreen from './screens/ProfileScreen';
 import CreateBudgetScreen from './screens/CreateBudgetScreen.js';
 import SetBudgetAmountScreen from './screens/SetBudgetAmountScreen.js';
 import AddCategoryScreen from './screens/AddCategoryScreen.js';
+import SavingGoalScreen from './screens/SavingGoalScreen.js';
+import GroupWalletScreen from './screens/GroupWalletScreen.js';
+import GroupDetailScreen from './screens/GroupDetailScreen.js';
+import HealthScoreScreen from './screens/HealthScoreScreen.js';
+import OCRScanScreen from './screens/OCRScanScreen.js';
+import RecurringScreen from './screens/RecurringScreen.js';
 import { AuthProvider } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
 import { SettingsProvider } from './contexts/SettingsContext';
@@ -31,7 +37,7 @@ const smoothScreenTransition = {
   },
 };
 
-const tabRoutes = new Set(['Home', 'Transaction', 'Stats', 'Budget', 'Profile']);
+const tabRoutes = new Set(['Home', 'Transaction', 'Stats', 'Budget', 'Profile', 'SavingGoal', 'GroupWallet']);
 
 const createCardStyleInterpolator = (route) => ({ current, layouts }) => {
   const isTabRoute = tabRoutes.has(route.name);
@@ -89,31 +95,37 @@ export default function App() {
         <SettingsProvider>
           <NavigationContainer>
             <StatusBar style="dark" />
-          <Stack.Navigator
-            initialRouteName="Login"
-            screenOptions={({ route }) => ({
-              headerShown: false,
-              gestureEnabled: true,
-              transitionSpec: {
-                open: smoothScreenTransition,
-                close: smoothScreenTransition,
-              },
-              cardStyleInterpolator: createCardStyleInterpolator(route),
-            })}
-          >
-            <Stack.Screen name="Login"    component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Home"     component={HomeScreen} />
-            <Stack.Screen name="Transaction" component={TransactionScreen} />
-            <Stack.Screen name="Stats" component={StatsScreen} />
-            <Stack.Screen name="Budget" component={BudgetScreen} />
-            <Stack.Screen name="Limit" component={LimitScreen} />
-            <Stack.Screen name="AIChat" component={AIChatScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
-            <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
-            <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
-          </Stack.Navigator>
+            <Stack.Navigator
+              initialRouteName="Login"
+              screenOptions={({ route }) => ({
+                headerShown: false,
+                gestureEnabled: true,
+                transitionSpec: {
+                  open: smoothScreenTransition,
+                  close: smoothScreenTransition,
+                },
+                cardStyleInterpolator: createCardStyleInterpolator(route),
+              })}
+            >
+              <Stack.Screen name="Login"    component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="Home"     component={HomeScreen} />
+              <Stack.Screen name="Transaction" component={TransactionScreen} />
+              <Stack.Screen name="Stats" component={StatsScreen} />
+              <Stack.Screen name="Budget" component={BudgetScreen} />
+              <Stack.Screen name="Limit" component={LimitScreen} />
+              <Stack.Screen name="AIChat" component={AIChatScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
+              <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
+              <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
+              <Stack.Screen name="SavingGoal" component={SavingGoalScreen} />
+              <Stack.Screen name="GroupWallet" component={GroupWalletScreen} />
+              <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+              <Stack.Screen name="HealthScore" component={HealthScoreScreen} />
+              <Stack.Screen name="OCRScan" component={OCRScanScreen} />
+              <Stack.Screen name="Recurring" component={RecurringScreen} />
+            </Stack.Navigator>
           </NavigationContainer>
         </SettingsProvider>
       </FinanceProvider>
