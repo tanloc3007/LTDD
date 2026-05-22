@@ -8,35 +8,31 @@ import { getCategory, useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
-
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home' },
-  { id: 'history', label: 'Giao dich', icon: 'list' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person' },
-];
+import AppBottomNav from '../components/AppBottomNav';
 
 export default function HomeScreen({ navigation, route }) {
-  const userName = route?.params?.userName || 'Luan';
   const { transactions, loading } = useFinance();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const userName = user?.name || route?.params?.userName || '';
   const { colors: COLORS, formatCurrency } = useSettings();
   const styles = useMemo(() => getStyles(COLORS), [COLORS]);
 
   const QUICK_ACTIONS = [
     { id: '1', label: 'Them', icon: 'add-circle', color: COLORS.primary },
-    { id: '2', label: 'Thong ke', icon: 'bar-chart', color: '#8B5CF6' },
+    { id: '2', label: 'Quet HD', icon: 'camera', color: '#8B5CF6' },
     { id: '3', label: 'Ngan sach', icon: 'wallet', color: '#F59E0B' },
-    { id: '4', label: 'Han muc', icon: 'speedometer', color: '#EF4444' },
-    { id: '5', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
+    { id: '4', label: 'Tiet kiem', icon: 'save', color: '#2DCE89' },
+    { id: '5', label: 'Nhom', icon: 'people', color: '#06B6D4' },
+    { id: '6', label: 'Dinh ky', icon: 'repeat', color: '#EF4444' },
+    { id: '7', label: 'Suc khoe', icon: 'fitness', color: '#FF6B35' },
+    { id: '8', label: 'AI Chat', icon: 'chatbubbles', color: '#6366F1' },
   ];
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const [activeTab, setActiveTab] = useState('home');
   const [hideBalance, setHideBalance] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [savingGoals, setSavingGoals] = useState([]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -45,6 +41,12 @@ export default function HomeScreen({ navigation, route }) {
       apiRequest('/notifications', { headers: authHeaders })
         .then((res) => {
           if (mounted) setNotifications(res.notifications || []);
+        })
+        .catch(() => { });
+      // Lấy danh sách hũ tiết kiệm
+      apiRequest('/saving-goals', { headers: authHeaders })
+        .then((res) => {
+          if (mounted) setSavingGoals(res.goals || []);
         })
         .catch(() => { });
       return () => { mounted = false; };
@@ -106,32 +108,26 @@ export default function HomeScreen({ navigation, route }) {
     return `Danh muc ${getCategory(topCategoryId).label} dang chiem ${percent}% tong chi. Ban co the xem lai muc nay de toi uu ngan sach.`;
   }, [summary.totalExpense, transactions]);
 
-  const handleTabPress = (tabId) => {
-    if (tabId === 'history') {
-      navigation.navigate('Transaction');
-    } else if (tabId === 'stats') {
-      navigation.navigate('Stats');
-    } else if (tabId === 'wallet') {
-      navigation.navigate('Budget');
-    } else if (tabId === 'profile') {
-      navigation.navigate('Profile');
-    } else if (tabId !== 'home') {
-      Alert.alert('Tinh nang', `Man hinh "${NAV_TABS.find((t) => t.id === tabId)?.label}" dang phat trien!`);
-    } else {
-      setActiveTab(tabId);
-    }
-  };
+  // Tổng các hũ tiết kiệm
+  const totalSavedAmount = useMemo(() => savingGoals.reduce((s, g) => s + Number(g.currentAmount || 0), 0), [savingGoals]);
+  const activeGoals = savingGoals.filter(g => g.status === 'active');
 
   const handleQuickAction = (action) => {
     if (action.id === '1') {
       navigation.navigate('Transaction');
     } else if (action.id === '2') {
-      navigation.navigate('Stats');
+      navigation.navigate('OCRScan');
     } else if (action.id === '3') {
       navigation.navigate('Budget');
     } else if (action.id === '4') {
-      navigation.navigate('Limit');
+      navigation.navigate('SavingGoal');
     } else if (action.id === '5') {
+      navigation.navigate('GroupWallet');
+    } else if (action.id === '6') {
+      navigation.navigate('Recurring');
+    } else if (action.id === '7') {
+      navigation.navigate('HealthScore');
+    } else if (action.id === '8') {
       navigation.navigate('AIChat');
     } else {
       Alert.alert(action.label, 'Tinh nang dang phat trien!');
@@ -148,7 +144,7 @@ export default function HomeScreen({ navigation, route }) {
             </View>
             <View>
               <Text style={styles.greetText}>Xin chao,</Text>
-              <Text style={styles.userName}>{userName.charAt(0).toUpperCase() + userName.slice(1)}</Text>
+              <Text style={styles.userName}>{userName || 'Nguoi dung'}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
@@ -200,6 +196,7 @@ export default function HomeScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* Quick Actions - 2 rows of 4 */}
         <View style={styles.section}>
           <View style={styles.quickActions}>
             {QUICK_ACTIONS.map((action) => (
@@ -217,6 +214,43 @@ export default function HomeScreen({ navigation, route }) {
             ))}
           </View>
         </View>
+
+        {/* Saving Goals Widget */}
+        {activeGoals.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Hu Tiet Kiem</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('SavingGoal')}>
+                <Text style={styles.seeAll}>Xem tat ca</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.savingCard}>
+              <View style={styles.savingCardTop}>
+                <View style={styles.savingIcon}>
+                  <Ionicons name="save" size={20} color={COLORS.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.savingTitle}>Tong tiet kiem: {formatCurrency(totalSavedAmount)}</Text>
+                  <Text style={styles.savingSubtitle}>{activeGoals.length} muc tieu dang hoat dong</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.gray} />
+              </View>
+              {activeGoals.slice(0, 2).map((goal) => {
+                const percent = goal.targetAmount > 0 ? Math.min(Math.round((goal.currentAmount / goal.targetAmount) * 100), 100) : 0;
+                return (
+                  <View key={goal._id} style={styles.savingGoalRow}>
+                    <View style={[styles.savingGoalDot, { backgroundColor: goal.color || COLORS.primary }]} />
+                    <Text style={styles.savingGoalName} numberOfLines={1}>{goal.title}</Text>
+                    <Text style={styles.savingGoalPercent}>{percent}%</Text>
+                    <View style={styles.savingProgress}>
+                      <View style={[styles.savingProgressFill, { width: `${percent}%`, backgroundColor: goal.color || COLORS.primary }]} />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <View style={styles.tipCard}>
@@ -256,41 +290,18 @@ export default function HomeScreen({ navigation, route }) {
         <View style={{ height: 16 }} />
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={styles.navItem}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.navIconWrap, isActive && styles.navIconActive]}>
-                <Ionicons
-                  name={isActive ? tab.icon : `${tab.icon}-outline`}
-                  size={22}
-                  color={isActive ? COLORS.primary : COLORS.gray}
-                />
-              </View>
-              <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="home" />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>
           <View style={styles.sheetLg}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Thông báo</Text>
+              <Text style={styles.sheetTitle}>Thong bao</Text>
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 {unreadCount > 0 && (
                   <TouchableOpacity onPress={markAllRead}>
                     <Text style={{ color: COLORS.primary, fontSize: SIZES.sm, fontWeight: FONTS.semiBold }}>
-                      Đọc tất cả
+                      Doc tat ca
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -303,7 +314,7 @@ export default function HomeScreen({ navigation, route }) {
             {notifications.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Ionicons name="notifications-off-outline" size={40} color={COLORS.border} />
-                <Text style={styles.emptyText}>Chưa có thông báo nào.</Text>
+                <Text style={styles.emptyText}>Chua co thong bao nao.</Text>
               </View>
             ) : (
               <FlatList
@@ -394,12 +405,26 @@ const getStyles = (COLORS) => StyleSheet.create({
   sectionTitle: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.dark },
   seeAll: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold, color: COLORS.primary },
   quickActions: {
-    flexDirection: 'row', justifyContent: 'space-between',
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
     backgroundColor: COLORS.white, borderRadius: 20, padding: 16, ...SHADOWS.sm,
   },
-  quickItem: { alignItems: 'center', gap: 8, flex: 1 },
+  quickItem: { alignItems: 'center', gap: 8, width: '23%', marginBottom: 8 },
   quickIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  quickLabel: { fontSize: SIZES.xs, fontWeight: FONTS.semiBold, color: COLORS.dark },
+  quickLabel: { fontSize: SIZES.xs, fontWeight: FONTS.semiBold, color: COLORS.dark, textAlign: 'center' },
+  savingCard: {
+    backgroundColor: COLORS.white, borderRadius: 20, padding: 16,
+    borderLeftWidth: 4, borderLeftColor: COLORS.success, ...SHADOWS.sm,
+  },
+  savingCardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  savingIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: `${COLORS.success}12`, alignItems: 'center', justifyContent: 'center' },
+  savingTitle: { fontSize: SIZES.sm, fontWeight: FONTS.bold, color: COLORS.dark },
+  savingSubtitle: { fontSize: SIZES.xs, color: COLORS.gray, marginTop: 2 },
+  savingGoalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  savingGoalDot: { width: 8, height: 8, borderRadius: 4 },
+  savingGoalName: { flex: 1, fontSize: SIZES.xs, color: COLORS.dark, fontWeight: FONTS.medium },
+  savingGoalPercent: { fontSize: SIZES.xs, color: COLORS.gray, minWidth: 32, textAlign: 'right' },
+  savingProgress: { width: 60, height: 4, backgroundColor: COLORS.border, borderRadius: 2, overflow: 'hidden' },
+  savingProgressFill: { height: '100%', borderRadius: 2 },
   tipCard: {
     backgroundColor: COLORS.white, borderRadius: 20, padding: 16,
     borderLeftWidth: 4, borderLeftColor: COLORS.primary, ...SHADOWS.sm,
@@ -424,19 +449,7 @@ const getStyles = (COLORS) => StyleSheet.create({
   txSub: { fontSize: SIZES.xs, color: COLORS.gray },
   txAmount: { fontSize: SIZES.md, fontWeight: FONTS.bold },
   emptyState: { padding: 20, textAlign: 'center', color: COLORS.gray, fontSize: SIZES.sm },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1, borderTopColor: COLORS.border,
-    paddingBottom: 8, paddingTop: 4,
-    ...SHADOWS.sm,
-  },
-  navItem: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 6 },
-  navIconWrap: { width: 40, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  navIconActive: { backgroundColor: `${COLORS.primary}15` },
-  navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
-  navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
-  
+
   // modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },

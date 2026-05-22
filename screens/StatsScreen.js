@@ -20,17 +20,10 @@ import { FONTS, SHADOWS, SIZES } from '../constants/theme';
 import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import AppBottomNav from '../components/AppBottomNav';
 
 const screenWidth = Dimensions.get('window').width;
 const chartWidth = Math.min(screenWidth - 48, 340);
-
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home' },
-  { id: 'history', label: 'Giao dich', icon: 'add-circle' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person' },
-];
 
 const GROUP_CATEGORY_OPTIONS = [
   { id: 'food', label: 'An uong', icon: 'restaurant', color: '#E91E8C' },
@@ -83,21 +76,12 @@ export default function StatsScreen({ navigation }) {
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (_) {}
   };
-  const [groupTotalAmount, setGroupTotalAmount] = useState(2220000);
-  const [groupTotalInput, setGroupTotalInput] = useState('2220000');
+  const [groupTotalAmount, setGroupTotalAmount] = useState(0);
+  const [groupTotalInput, setGroupTotalInput] = useState('');
   const [editingGroupTotal, setEditingGroupTotal] = useState(false);
-  const [groupMembers, setGroupMembers] = useState([
-    { id: 'm-1', name: 'An (Ban)', initial: 'A' },
-    { id: 'm-2', name: 'Binh', initial: 'B' },
-    { id: 'm-3', name: 'Chong', initial: 'C' },
-    { id: 'm-4', name: 'Lan', initial: 'L' },
-  ]);
+  const [groupMembers, setGroupMembers] = useState([]);
   const [newMemberName, setNewMemberName] = useState('');
-  const [groupCategoryItems, setGroupCategoryItems] = useState([
-    { id: 'gc-1', categoryId: 'food', amount: 20000 },
-    { id: 'gc-2', categoryId: 'transport', amount: 200000 },
-    { id: 'gc-3', categoryId: 'shopping', amount: 2000000 },
-  ]);
+  const [groupCategoryItems, setGroupCategoryItems] = useState([]);
   const [selectedGroupCategoryId, setSelectedGroupCategoryId] = useState('food');
   const [groupCategoryAmountInput, setGroupCategoryAmountInput] = useState('');
 
@@ -135,7 +119,7 @@ export default function StatsScreen({ navigation }) {
     }).filter((item) => item.total > 0);
   }, [expenseTransactions]);
 
-  const pieData = (categoryStats.length ? categoryStats : [{ ...CATEGORIES[0], total: 1 }]).map((item) => ({
+  const pieData = categoryStats.map((item) => ({
     name: item.label,
     population: item.total,
     color: item.color,
@@ -164,15 +148,6 @@ export default function StatsScreen({ navigation }) {
       setGroupTotalInput(String(total));
     }
   }, [groupCategoryItems, editingGroupTotal]);
-
-  const handleNav = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') navigation.navigate('Profile');
-    else Alert.alert('Tinh nang', 'Man hinh dang phat trien!');
-  };
 
   const saveGroupTotal = () => {
     const nextAmount = Number(String(groupTotalInput).replace(/[^0-9]/g, ''));
@@ -240,7 +215,7 @@ export default function StatsScreen({ navigation }) {
         <View style={styles.avatar}>
           <Ionicons name="person" size={18} color={COLORS.primary} />
         </View>
-        <Text style={styles.brand}>MoMo Finance</Text>
+        <Text style={styles.brand}>FinancialManagement Finance</Text>
         <TouchableOpacity style={styles.bell} onPress={() => setShowNotifModal(true)}>
           <Ionicons name="notifications-outline" size={20} color={COLORS.primaryDark} />
           {unreadCount > 0 && (
@@ -304,7 +279,7 @@ export default function StatsScreen({ navigation }) {
         />
       )}
 
-      <BottomNav activeTab="stats" onPress={handleNav} COLORS={COLORS} styles={styles} />
+      <AppBottomNav navigation={navigation} activeTab="stats" position="absolute" />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>
@@ -389,17 +364,21 @@ function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, 
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Co cau chi tieu</Text>
-        <PieChart
-          data={pieData}
-          width={chartWidth}
-          height={170}
-          chartConfig={chartConfig}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="46"
-          absolute={false}
-          hasLegend
-        />
+        {pieData.length ? (
+          <PieChart
+            data={pieData}
+            width={chartWidth}
+            height={170}
+            chartConfig={chartConfig}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="46"
+            absolute={false}
+            hasLegend
+          />
+        ) : (
+          <Text style={styles.emptyState}>Chua co du lieu chi tieu trong bo loc nay.</Text>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -629,26 +608,6 @@ function CategoryDetail({ item, total, styles, formatCurrency }) {
           <View style={[styles.progressFill, { width: `${Math.min(percent, 100)}%`, backgroundColor: item.color }]} />
         </View>
       </View>
-    </View>
-  );
-}
-
-function BottomNav({ activeTab, onPress, COLORS, styles }) {
-  return (
-    <View style={styles.bottomNav}>
-      {NAV_TABS.map((tab) => {
-        const active = activeTab === tab.id;
-        return (
-          <TouchableOpacity key={tab.id} style={styles.navItem} onPress={() => onPress(tab.id)}>
-            <Ionicons
-              name={active ? tab.icon : `${tab.icon}-outline`}
-              size={20}
-              color={active ? COLORS.primary : COLORS.gray}
-            />
-            <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
     </View>
   );
 }

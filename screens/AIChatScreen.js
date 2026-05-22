@@ -81,7 +81,7 @@ export default function AIChatScreen({ navigation }) {
   const [messages, setMessages] = useState([
     {
       id: '1',
-      text: `Xin chào ${user?.name || 'Luân'}! Tôi là trợ lý tài chính AI của bạn. Tôi có thể giúp gì cho bạn hôm nay?`,
+      text: `Xin chao ${user?.name || 'ban'}! Toi la tro ly tai chinh AI cua ban. Toi co the giup gi cho ban hom nay?`,
       sender: 'ai',
       timestamp: new Date(),
     },
@@ -173,9 +173,11 @@ export default function AIChatScreen({ navigation }) {
   };
 
   const suggestions = [
-    { text: 'Phân tích chi tiêu tháng này', icon: 'analytics' },
-    { text: 'Gợi ý tiết kiệm', icon: 'bulb' },
-    { text: 'Chia bill ăn uống 3 người 500k', icon: 'receipt' },
+    { text: 'Phan tich chi tieu thang nay', icon: 'analytics' },
+    { text: 'Goi y tiet kiem', icon: 'bulb' },
+    { text: 'Chia bill an uong 3 nguoi 500k', icon: 'receipt' },
+    { text: 'Lam sao de dat diem tai chinh cao?', icon: 'fitness' },
+    { text: 'Ke hoach tiet kiem mua xe may 30 trieu', icon: 'save' },
   ];
 
   return (

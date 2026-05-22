@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, token, login, register, logout }),
+    () => ({ user, token, setUser, login, register, logout }),
     [user, token]
   );
 

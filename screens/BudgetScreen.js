@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -19,11 +18,16 @@ import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
+import AppBottomNav from '../components/AppBottomNav';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function currentMonthLabel() {
   const now = new Date();
-  return `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+  const months = [
+    'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+  ];
+  return `${months[now.getMonth()]} ${now.getFullYear()}`;
 }
 
 function currentMonthKey() {
@@ -38,29 +42,26 @@ function parseDate(str) {
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
-const EXTRA_CATEGORIES = [
-  { id: 'food', label: 'Ăn uống', icon: 'restaurant', color: '#E91E8C' },
-  { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
-  { id: 'shopping', label: 'Mua sắm', icon: 'bag-handle', color: '#FF9500' },
-  { id: 'health', label: 'Sức khỏe', icon: 'heart', color: '#00C853' },
-  { id: 'entertainment', label: 'Giải trí', icon: 'game-controller', color: '#9C27B0' },
-  { id: 'education', label: 'Giáo dục', icon: 'school', color: '#1976FF' },
-  { id: 'home', label: 'Nhà cửa', icon: 'home', color: '#FF8A00' },
-  { id: 'other', label: 'Khác', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
+const CATEGORIES = [
+    { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
+    { id: 'investment', label: 'Đầu tư', icon: 'leaf', color: '#2DCE89' },
+    { id: 'entertainment', label: 'Play-circle', icon: 'play-circle', color: '#F5365C' },
+    { id: 'bills', label: 'Hóa đơn', icon: 'receipt', color: '#00D9D5' },
+    { id: 'education', label: 'Học tập', icon: 'book', color: '#9C27B0' },
+    { id: 'beauty', label: 'Làm đẹp', icon: 'brush', color: '#FF4FB8' },
+    { id: 'family', label: 'Người thân', icon: 'body', color: '#FF6B35' },
+    { id: 'home', label: 'Nhà cửa', icon: 'home', color: '#7E57C2' },
+    { id: 'health', label: 'Sức khỏe', icon: 'heart', color: '#F5365C' },
+    { id: 'charity', label: 'Từ thiện', icon: 'wallet', color: '#FF9500' },
+    { id: 'shopping', label: 'Chợ, siêu thị', icon: 'cart', color: '#FF8A00' },
+    { id: 'food', label: 'Ăn uống', icon: 'restaurant', color: '#FF6B35' },
 ];
 
 function getCatMeta(categoryId) {
-  return EXTRA_CATEGORIES.find((c) => c.id === categoryId) || EXTRA_CATEGORIES[EXTRA_CATEGORIES.length - 1];
+  return CATEGORIES.find((c) => c.id === categoryId) || { id: 'other', label: categoryId, icon: 'ellipsis-horizontal', color: '#9CA3AF' };
 }
 
 // ─── NAV TABS (shared) ───────────────────────────────────────────────────────
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chủ', icon: 'home' },
-  { id: 'history', label: 'Giao dịch', icon: 'list' },
-  { id: 'stats', label: 'Thống kê', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngân sách', icon: 'wallet' },
-  { id: 'profile', label: 'Cá nhân', icon: 'person' },
-];
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function BudgetScreen({ navigation }) {
@@ -75,27 +76,8 @@ export default function BudgetScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNotifModal, setShowNotifModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-
-  // ── form state ──
-  const [selCatId, setSelCatId] = useState('');
-  const [budgetAmt, setBudgetAmt] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const monthKey = currentMonthKey();
-
-  // ── push notification helper ──
-  const pushNotif = useCallback(async (message, type = 'other') => {
-    if (!token) return;
-    try {
-      const notif = await apiRequest('/notifications', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ message, type }),
-      });
-      setNotifications((prev) => [notif.notification, ...prev]);
-    } catch (_) { }
-  }, [token]);
 
   // ── fetch ──
   const fetchData = useCallback(async () => {
@@ -138,8 +120,6 @@ export default function BudgetScreen({ navigation }) {
   // ── total budget / spent ──
   const totalBudget = useMemo(() => budgets.reduce((s, b) => s + b.budgetAmount, 0), [budgets]);
   const totalSpent = useMemo(() => budgets.reduce((s, b) => s + (spentMap[b.categoryId] || 0), 0), [budgets, spentMap]);
-  const totalPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0;
-  const totalRemain = totalBudget - totalSpent;
 
   // ── unread count ──
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -152,42 +132,6 @@ export default function BudgetScreen({ navigation }) {
     } catch (_) { }
   };
 
-  // ── add budget ──
-  const handleAddBudget = async () => {
-    if (!selCatId) return Alert.alert('Thông báo', 'Vui lòng chọn danh mục.');
-    const amt = Number(String(budgetAmt).replace(/\D/g, ''));
-    if (!amt || amt <= 0) return Alert.alert('Thông báo', 'Vui lòng nhập số tiền hợp lệ.');
-    const cat = getCatMeta(selCatId);
-    setSaving(true);
-    try {
-      await apiRequest('/budgets', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          categoryId: cat.id,
-          label: cat.label,
-          icon: cat.icon,
-          color: cat.color,
-          budgetAmount: amt,
-          month: monthKey,
-        }),
-      });
-      // Lưu thông báo
-      await pushNotif(
-        `💰 Đã thêm ngân sách "${cat.label}" ${Number(amt).toLocaleString('vi-VN')}đ cho ${currentMonthLabel().toLowerCase()}`,
-        'other'
-      );
-      setShowAddModal(false);
-      setSelCatId('');
-      setBudgetAmt('');
-      fetchData();
-    } catch (err) {
-      Alert.alert('Lỗi', err.message || 'Không thể thêm danh mục ngân sách.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ── delete budget ──
   const handleDelete = (id, label) => {
     Alert.alert('Xoá ngân sách', `Xoá ngân sách "${label}"?`, [
@@ -196,7 +140,6 @@ export default function BudgetScreen({ navigation }) {
         text: 'Xoá', style: 'destructive', onPress: async () => {
           try {
             await apiRequest(`/budgets/${id}`, { method: 'DELETE', headers: authHeaders });
-            await pushNotif(`🗑️ Đã xoá ngân sách danh mục "${label}"`, 'other');
             fetchData();
           } catch (_) { }
         },
@@ -205,166 +148,138 @@ export default function BudgetScreen({ navigation }) {
   };
 
   // ── nav ──
-  const handleTabPress = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') navigation.navigate('Profile');
-  };
 
-  // ── categories not yet added ──
-  const availableCats = EXTRA_CATEGORIES.filter(
-    (c) => !budgets.find((b) => b.categoryId === c.id)
-  );
+  // ── FAQ ──
+  const [expandedFaq, setExpandedFaq] = useState(null);
+  const FAQs = [
+      { id: 1, q: '1. Ngân sách hoạt động thế nào?', a: 'Ngân sách giúp bạn lập kế hoạch chi tiêu cho từng danh mục cụ thể trong tháng. Khi bạn thực hiện giao dịch, ứng dụng sẽ tự động cập nhật số tiền đã chi so với hạn mức bạn đặt ra.' },
+      { id: 2, q: '2. Trạng thái ngân sách là gì?', a: '"Tốt": Chi tiêu của bạn đang dưới mức hạn mức.\n"Cảnh báo": Bạn đã chi tiêu gần hết hạn mức (trên 80%).\n"Vượt": Bạn đã chi tiêu quá số tiền cho phép.' }
+  ];
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.safe}>
       {/* ── HEADER ── */}
       <View style={s.header}>
-        <View style={s.logoRow}>
-          <View style={s.logoCircle}>
-            <Ionicons name="wallet" size={18} color="#FFF" />
-          </View>
-          <Text style={s.logoText}>MoMo Finance</Text>
-        </View>
-        <TouchableOpacity style={s.notifBtn} onPress={() => setShowNotifModal(true)}>
-          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
-          {unreadCount > 0 && (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-            </View>
-          )}
+        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
         </TouchableOpacity>
+        <Text style={s.headerTitle}>Ngân sách</Text>
+        <View style={s.headerRight}>
+          <TouchableOpacity style={s.iconBtn}>
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={COLORS.dark} />
+          </TouchableOpacity>
+          <View style={s.headerDivider} />
+          <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Home')}>
+            <Ionicons name="home-outline" size={22} color={COLORS.dark} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-
-        {/* ── TITLE ── */}
-        <View style={s.titleRow}>
-          <Text style={s.title}>Ngân sách {currentMonthLabel().toLowerCase()}</Text>
-          <TouchableOpacity onPress={fetchData}>
-            <Ionicons name="pencil-outline" size={20} color={COLORS.gray} />
-          </TouchableOpacity>
+        
+        {/* ── DATE & ADD NEW ── */}
+        <View style={s.topRow}>
+            <View>
+                <Text style={s.monthLabel}>{currentMonthLabel()}</Text>
+                <Text style={s.subLabel}>Chi 18 ngày tới</Text>
+            </View>
+            <TouchableOpacity 
+                style={s.addNewBtn} 
+                onPress={() => navigation.navigate('CreateBudget', { existingBudgets: budgets })}
+            >
+                <Ionicons name="add" size={20} color={COLORS.primary} />
+                <Text style={s.addNewText}>Thêm mới</Text>
+            </TouchableOpacity>
         </View>
 
-        {/* ── TOTAL CARD ── */}
+        {/* ── CATEGORY SECTION ── */}
+        <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Danh mục</Text>
+            <TouchableOpacity style={s.sortBtn}>
+                <Text style={s.sortText}>Xếp theo tên</Text>
+                <Ionicons name="menu-outline" size={18} color={COLORS.dark} />
+            </TouchableOpacity>
+        </View>
+
         {loading ? (
-          <ActivityIndicator color={COLORS.primary} style={{ marginTop: 24 }} />
-        ) : (
-          <>
-            <View style={s.totalCard}>
-              <View style={s.totalTop}>
-                <View>
-                  <Text style={s.totalLabel}>Tổng ngân sách</Text>
-                  <Text style={s.totalAmount}>{formatCurrency(totalBudget)}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={s.spentLabel}>Đã chi</Text>
-                  <Text style={s.spentValue}>
-                    {formatCurrency(totalSpent)}{'\n'}
-                    <Text style={s.pctText}>({Math.round(totalPct)}%)</Text>
-                  </Text>
-                </View>
-              </View>
-              {/* progress bar */}
-              <View style={s.barBg}>
-                <View style={[s.barFill, {
-                  width: `${totalPct}%`,
-                  backgroundColor: totalPct >= 100 ? COLORS.danger : totalPct >= 80 ? COLORS.warning : COLORS.success,
-                }]} />
-              </View>
-              <Text style={s.remainText}>Còn lại: {formatCurrency(Math.max(totalRemain, 0))}</Text>
-            </View>
-
-            {/* ── CATEGORY LIST ── */}
-            <Text style={s.secTitle}>Theo danh mục</Text>
-
-            {budgets.length === 0 ? (
-              <View style={s.emptyBox}>
+            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 24 }} />
+        ) : budgets.length === 0 ? (
+            <View style={s.emptyBox}>
                 <Ionicons name="wallet-outline" size={40} color={COLORS.border} />
                 <Text style={s.emptyText}>Chưa có ngân sách nào.{'\n'}Thêm danh mục để bắt đầu!</Text>
-              </View>
-            ) : (
-              budgets.map((b) => {
-                const spent = spentMap[b.categoryId] || 0;
-                const pct = b.budgetAmount > 0 ? (spent / b.budgetAmount) * 100 : 0;
-                const over = spent > b.budgetAmount;
-                const cat = getCatMeta(b.categoryId);
-                const barColor = over ? COLORS.danger : pct >= 80 ? COLORS.warning : COLORS.success;
+            </View>
+        ) : (
+            <View style={s.budgetList}>
+                {budgets.map((b) => {
+                    const spent = spentMap[b.categoryId] || 0;
+                    const remain = b.budgetAmount - spent;
+                    const cat = getCatMeta(b.categoryId);
+                    const isExceeded = spent > b.budgetAmount;
 
-                return (
-                  <View key={b._id} style={s.catCard}>
-                    <View style={s.catRow}>
-                      <View style={[s.catIcon, { backgroundColor: `${cat.color}18` }]}>
-                        <Ionicons name={cat.icon} size={20} color={cat.color} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[s.catName, over && { color: COLORS.danger }]}>{b.label}</Text>
-                        <Text style={s.catBudget}>Ngân sách: {formatCurrency(b.budgetAmount)}</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={s.catSpent}>{formatCurrency(spent)}</Text>
-                          <Text style={[s.catPct, { color: barColor }]}>{Math.round(pct)}%</Text>
+                    return (
+                        <View key={b._id} style={s.catCard}>
+                            <View style={s.cardTop}>
+                                <View style={[s.catIconWrap, { backgroundColor: `${cat.color}25` }]}>
+                                    <View style={[s.innerCircle, { backgroundColor: '#00D9D5' }]}>
+                                        <Ionicons name={cat.icon} size={22} color={cat.color} />
+                                    </View>
+                                </View>
+                                <View style={s.cardInfo}>
+                                    <View style={s.cardHeaderRow}>
+                                        <Text style={s.catLabel}>{b.label}</Text>
+                                        <TouchableOpacity onPress={() => handleDelete(b._id, b.label)}>
+                                            <Ionicons name="ellipsis-horizontal" size={20} color={COLORS.dark} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <Text style={s.limitText}>Hạn mức: {formatCurrency(b.budgetAmount)}</Text>
+                                    <View style={s.remainRow}>
+                                        <Text style={s.remainValue}>Còn lại <Text style={[s.bold, { color: isExceeded ? COLORS.danger : '#00A8A5' }]}>{formatCurrency(Math.max(remain, 0))}</Text></Text>
+                                        <View style={[s.statusBadge, { backgroundColor: isExceeded ? `${COLORS.danger}15` : '#E7F9F9' }]}>
+                                            <Ionicons name={isExceeded ? "warning" : "checkmark-circle"} size={14} color={isExceeded ? COLORS.danger : COLORS.success} />
+                                            <Text style={[s.statusText, { color: isExceeded ? COLORS.danger : COLORS.success }]}>{isExceeded ? 'Vượt' : 'Tốt'}</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </View>
                         </View>
-                        <TouchableOpacity
-                          style={s.deleteBtn}
-                          onPress={() => handleDelete(b._id, b.label)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <View style={s.barBg}>
-                      <View style={[s.barFill, { width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }]} />
-                    </View>
-                    {over && (
-                      <Text style={s.overText}>
-                        Vượt ngân sách {formatCurrency(spent - b.budgetAmount)}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </>
+                    );
+                })}
+            </View>
         )}
 
-        {/* ── ADD BUTTON ── */}
-        <TouchableOpacity style={s.addBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
-          <Ionicons name="add" size={20} color={COLORS.primary} />
-          <Text style={s.addBtnText}>Thêm danh mục ngân sách</Text>
-        </TouchableOpacity>
+        {/* ── FAQ SECTION ── */}
+        <View style={s.faqSection}>
+            <View style={s.faqHeader}>
+                <Ionicons name="help-circle-outline" size={22} color={COLORS.dark} />
+                <Text style={s.faqTitle}>Tìm hiểu về ngân sách</Text>
+            </View>
+            <View style={s.faqList}>
+                {FAQs.map(faq => (
+                    <View key={faq.id} style={s.faqItem}>
+                        <TouchableOpacity 
+                            style={s.faqQuestion} 
+                            onPress={() => setExpandedFaq(expandedFaq === faq.id ? null : faq.id)}
+                        >
+                            <Text style={s.faqText}>{faq.q}</Text>
+                            <Ionicons name={expandedFaq === faq.id ? "chevron-up" : "chevron-down"} size={18} color={COLORS.gray} />
+                        </TouchableOpacity>
+                        {expandedFaq === faq.id && (
+                            <View style={s.faqAnswer}>
+                                <Text style={s.faqAnswerText}>{faq.a}</Text>
+                            </View>
+                        )}
+                        {faq.id < FAQs.length && <View style={s.faqDivider} />}
+                    </View>
+                ))}
+            </View>
+        </View>
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* ── BOTTOM NAV ── */}
-      <View style={s.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          const isActive = tab.id === 'wallet';
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={s.navItem}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[s.navIconWrap, isActive && s.navIconActive]}>
-                <Ionicons
-                  name={isActive ? tab.icon : `${tab.icon}-outline`}
-                  size={22}
-                  color={isActive ? COLORS.primary : COLORS.gray}
-                />
-              </View>
-              <Text style={[s.navLabel, isActive && s.navLabelActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="wallet" />
 
       {/* ═══════════ NOTIFICATION MODAL ═══════════ */}
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
@@ -398,16 +313,8 @@ export default function BudgetScreen({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 8 }}
                 renderItem={({ item }) => {
-                  const iconName =
-                    item.type === 'income' ? 'arrow-down-circle' :
-                      item.type === 'budget_over' ? 'warning' :
-                        item.type === 'budget_warning' ? 'flash' :
-                          'receipt';
-                  const iconColor =
-                    item.type === 'income' ? COLORS.success :
-                      item.type === 'budget_over' ? COLORS.danger :
-                        item.type === 'budget_warning' ? COLORS.warning :
-                          COLORS.primary;
+                  const iconName = item.type === 'income' ? 'arrow-down-circle' : 'receipt';
+                  const iconColor = item.type === 'income' ? COLORS.success : COLORS.primary;
                   return (
                     <View style={[s.notifItem, !item.read && s.notifUnread]}>
                       <View style={[s.notifIcon, { backgroundColor: `${iconColor}15` }]}>
@@ -428,61 +335,6 @@ export default function BudgetScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-
-      {/* ═══════════ ADD CATEGORY MODAL ═══════════ */}
-      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
-        <View style={s.overlay}>
-          <View style={s.sheet}>
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>Thêm danh mục ngân sách</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={22} color={COLORS.dark} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={s.fieldLabel}>Chọn danh mục</Text>
-            <View style={s.catGrid}>
-              {availableCats.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[s.catChip, selCatId === c.id && { borderColor: c.color, backgroundColor: `${c.color}15` }]}
-                  onPress={() => setSelCatId(c.id)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={c.icon} size={18} color={selCatId === c.id ? c.color : COLORS.gray} />
-                  <Text style={[s.catChipLabel, selCatId === c.id && { color: c.color }]}>{c.label}</Text>
-                </TouchableOpacity>
-              ))}
-              {availableCats.length === 0 && (
-                <Text style={s.emptyText}>Tất cả danh mục đã được thêm.</Text>
-              )}
-            </View>
-
-            <Text style={s.fieldLabel}>Số tiền ngân sách (đ)</Text>
-            <TextInput
-              style={s.input}
-              placeholder="Ví dụ: 3000000"
-              placeholderTextColor={COLORS.lightGray}
-              keyboardType="numeric"
-              value={budgetAmt}
-              onChangeText={setBudgetAmt}
-            />
-
-            <TouchableOpacity
-              style={[s.saveBtn, saving && { opacity: 0.6 }]}
-              onPress={handleAddBudget}
-              disabled={saving}
-              activeOpacity={0.85}
-            >
-              {saving ? (
-                <ActivityIndicator color={COLORS.white} />
-              ) : (
-                <Text style={s.saveBtnText}>Thêm ngân sách</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -493,49 +345,121 @@ const getStyles = (COLORS) => StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: 8 },
 
   // header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, backgroundColor: COLORS.white },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  logoText: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.primary },
-  notifBtn: { position: 'relative', padding: 4 },
-  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 16, 
+    paddingTop: 12, 
+    paddingBottom: 12, 
+    backgroundColor: COLORS.white 
+  },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  headerRight: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: COLORS.bg,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  iconBtn: { padding: 4 },
+  headerDivider: { width: 1, height: 16, backgroundColor: COLORS.border, marginHorizontal: 4 },
 
-  // title
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 20, marginBottom: 12 },
-  title: { fontSize: SIZES.h1, fontWeight: FONTS.extraBold, color: COLORS.dark, flex: 1 },
+  // top row
+  topRow: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      paddingHorizontal: 16, 
+      paddingVertical: 16,
+      backgroundColor: COLORS.white,
+      borderBottomWidth: 1,
+      borderBottomColor: COLORS.border,
+  },
+  monthLabel: { fontSize: SIZES.xl, fontWeight: FONTS.extraBold, color: COLORS.dark },
+  subLabel: { fontSize: SIZES.sm, color: COLORS.gray, marginTop: 2 },
+  addNewBtn: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      borderWidth: 1, 
+      borderColor: COLORS.primary, 
+      borderRadius: 12, 
+      paddingHorizontal: 12, 
+      paddingVertical: 6,
+      gap: 4,
+  },
+  addNewText: { color: COLORS.primary, fontWeight: FONTS.bold, fontSize: SIZES.sm },
 
-  // total card
-  totalCard: { marginHorizontal: 16, backgroundColor: COLORS.white, borderRadius: 20, padding: 20, ...SHADOWS.sm },
-  totalTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  totalLabel: { fontSize: SIZES.sm, color: COLORS.gray, marginBottom: 4 },
-  totalAmount: { fontSize: 26, fontWeight: FONTS.extraBold, color: COLORS.primary },
-  spentLabel: { fontSize: SIZES.sm, color: COLORS.gray, marginBottom: 4 },
-  spentValue: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.dark, textAlign: 'right' },
-  pctText: { fontSize: SIZES.sm, fontWeight: FONTS.regular },
-  barBg: { height: 8, borderRadius: 4, backgroundColor: `${COLORS.primary}20`, overflow: 'hidden', marginBottom: 8 },
-  barFill: { height: '100%', borderRadius: 4 },
-  remainText: { fontSize: SIZES.sm, color: COLORS.gray, textAlign: 'right' },
+  // section header
+  sectionHeader: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'space-between', 
+      paddingHorizontal: 16, 
+      marginTop: 20, 
+      marginBottom: 12 
+  },
+  sectionTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sortText: { fontSize: SIZES.sm, color: COLORS.dark, fontWeight: FONTS.medium },
 
-  // section
-  secTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark, marginHorizontal: 20, marginTop: 24, marginBottom: 12 },
-  emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  // list
+  budgetList: { paddingHorizontal: 16, gap: 12 },
+  catCard: { 
+      backgroundColor: COLORS.white, 
+      borderRadius: 20, 
+      padding: 16, 
+      ...SHADOWS.sm 
+  },
+  cardTop: { flexDirection: 'row', gap: 16 },
+  catIconWrap: { 
+      width: 64, 
+      height: 64, 
+      borderRadius: 32, 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      overflow: 'hidden'
+  },
+  innerCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center'
+  },
+  cardInfo: { flex: 1 },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  catLabel: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.dark },
+  limitText: { fontSize: SIZES.sm, color: COLORS.gray, marginTop: 2 },
+  remainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  remainValue: { fontSize: SIZES.sm, color: COLORS.dark },
+  bold: { fontWeight: FONTS.bold },
+  statusBadge: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      paddingHorizontal: 8, 
+      paddingVertical: 4, 
+      borderRadius: 20, 
+      gap: 4 
+  },
+  statusText: { fontSize: SIZES.xs, fontWeight: FONTS.bold },
+
+  // faq
+  faqSection: { marginTop: 32, paddingHorizontal: 16 },
+  faqHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  faqTitle: { fontSize: SIZES.base, fontWeight: FONTS.semiBold, color: COLORS.dark },
+  faqList: { backgroundColor: COLORS.white, borderRadius: 20, paddingHorizontal: 16, ...SHADOWS.sm },
+  faqItem: { },
+  faqQuestion: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
+  faqText: { fontSize: SIZES.sm, color: COLORS.dark, fontWeight: FONTS.medium },
+  faqAnswer: { paddingBottom: 16 },
+  faqAnswerText: { fontSize: SIZES.sm, color: COLORS.gray, lineHeight: 20 },
+  faqDivider: { height: 1, backgroundColor: COLORS.border },
+
+  emptyBox: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyText: { color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 },
-
-  // category card
-  catCard: { marginHorizontal: 16, marginBottom: 12, backgroundColor: COLORS.white, borderRadius: 20, padding: 16, ...SHADOWS.sm },
-  catRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  catIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  catName: { fontSize: SIZES.base, fontWeight: FONTS.semiBold, color: COLORS.dark },
-  catBudget: { fontSize: SIZES.xs, color: COLORS.gray, marginTop: 2 },
-  catSpent: { fontSize: SIZES.md, fontWeight: FONTS.bold, color: COLORS.dark },
-  catPct: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold },
-  overText: { fontSize: SIZES.xs, color: COLORS.danger, marginTop: 4, fontWeight: FONTS.semiBold },
-  deleteBtn: { width: 30, height: 30, borderRadius: 10, backgroundColor: `${COLORS.danger}12`, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-
-  // add button
-  addBtn: { marginHorizontal: 16, marginTop: 8, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed', paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  addBtnText: { color: COLORS.primary, fontSize: SIZES.base, fontWeight: FONTS.semiBold },
 
   // bottom nav
   bottomNav: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, paddingBottom: 8, paddingTop: 4, ...SHADOWS.sm },
@@ -545,27 +469,15 @@ const getStyles = (COLORS) => StyleSheet.create({
   navLabel: { fontSize: 9, color: COLORS.gray, fontWeight: FONTS.medium },
   navLabelActive: { color: COLORS.primary, fontWeight: FONTS.bold },
 
-  // modal overlay
+  // modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
   sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
-
-  // notification items
   notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   notifUnread: { backgroundColor: `${COLORS.primary}05`, borderRadius: 12, paddingHorizontal: 8 },
   notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
   notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
-
-  // add form
-  fieldLabel: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold, color: COLORS.dark, marginBottom: 8 },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white },
-  catChipLabel: { fontSize: SIZES.sm, fontWeight: FONTS.medium, color: COLORS.gray },
-  input: { borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: SIZES.base, color: COLORS.dark, marginBottom: 20, backgroundColor: COLORS.bg },
-  saveBtn: { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  saveBtnText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
 });

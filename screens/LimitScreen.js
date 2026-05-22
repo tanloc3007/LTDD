@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import { apiRequest } from '../constants/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useFinance } from '../contexts/FinanceContext';
 import { useSettings } from '../contexts/SettingsContext';
+import AppBottomNav from '../components/AppBottomNav';
 
 function currentMonthLabel() {
   const now = new Date();
@@ -37,13 +38,6 @@ function parseDate(str) {
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
-const NAV_TABS = [
-  { id: 'home', label: 'Trang chủ', icon: 'home' },
-  { id: 'history', label: 'Giao dịch', icon: 'list' },
-  { id: 'stats', label: 'Thống kê', icon: 'bar-chart' },
-  { id: 'wallet', label: 'Ngân sách', icon: 'wallet' },
-  { id: 'profile', label: 'Cá nhân', icon: 'person' },
-];
 
 export default function LimitScreen({ navigation }) {
   const { token } = useAuth();
@@ -139,14 +133,6 @@ export default function LimitScreen({ navigation }) {
     }
   };
 
-  const handleTabPress = (tabId) => {
-    if (tabId === 'home') navigation.navigate('Home');
-    else if (tabId === 'history') navigation.navigate('Transaction');
-    else if (tabId === 'stats') navigation.navigate('Stats');
-    else if (tabId === 'wallet') navigation.navigate('Budget');
-    else if (tabId === 'profile') navigation.navigate('Profile');
-  };
-
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
@@ -154,7 +140,7 @@ export default function LimitScreen({ navigation }) {
           <View style={s.logoCircle}>
             <Ionicons name="speedometer" size={18} color="#FFF" />
           </View>
-          <Text style={s.logoText}>MoMo Finance</Text>
+          <Text style={s.logoText}>FinancialManagement Finance</Text>
         </View>
         <TouchableOpacity style={s.notifBtn} onPress={() => setShowNotifModal(true)}>
           <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
@@ -213,8 +199,8 @@ export default function LimitScreen({ navigation }) {
               )}
             </View>
 
-            <TouchableOpacity 
-              style={s.editBtn} 
+            <TouchableOpacity
+              style={s.editBtn}
               onPress={() => {
                 setLimitInput(globalLimit ? String(globalLimit.limitAmount) : '');
                 setShowEditModal(true);
@@ -237,27 +223,7 @@ export default function LimitScreen({ navigation }) {
         )}
       </ScrollView>
 
-      <View style={s.bottomNav}>
-        {NAV_TABS.map((tab) => {
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={s.navItem}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[s.navIconWrap]}>
-                <Ionicons
-                  name={`${tab.icon}-outline`}
-                  size={22}
-                  color={COLORS.gray}
-                />
-              </View>
-              <Text style={[s.navLabel]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <AppBottomNav navigation={navigation} activeTab="wallet" position="absolute" />
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={s.overlay}>
@@ -294,7 +260,7 @@ export default function LimitScreen({ navigation }) {
                   const iconColor = item.type === 'income' ? COLORS.success : item.type === 'budget_over' ? COLORS.danger : item.type === 'budget_warning' ? COLORS.warning : COLORS.primary;
                   return (
                     <View style={[s.notifItem, !item.read && s.notifUnread]}>
-                      <View style={[s.notifIcon, { backgroundColor: `${iconColor}15` }]} >
+                      <View style={[s.notifIcon, { backgroundColor: `${iconColor}15` }]}>
                         <Ionicons name={iconName} size={18} color={iconColor} />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -344,7 +310,6 @@ export default function LimitScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 }
@@ -352,8 +317,6 @@ export default function LimitScreen({ navigation }) {
 const getStyles = (COLORS) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flexGrow: 1, paddingBottom: 80 },
-
-  // header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, backgroundColor: COLORS.white },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
@@ -361,12 +324,8 @@ const getStyles = (COLORS) => StyleSheet.create({
   notifBtn: { position: 'relative', padding: 4 },
   badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
-
-  // title
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 20, marginBottom: 12 },
   title: { fontSize: SIZES.h1, fontWeight: FONTS.extraBold, color: COLORS.dark, flex: 1 },
-
-  // total card
   totalCard: { marginHorizontal: 16, backgroundColor: COLORS.white, borderRadius: 20, padding: 20, ...SHADOWS.sm },
   totalTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
   totalLabel: { fontSize: SIZES.sm, color: COLORS.gray, marginBottom: 4 },
@@ -377,36 +336,21 @@ const getStyles = (COLORS) => StyleSheet.create({
   barBg: { height: 8, borderRadius: 4, backgroundColor: `${COLORS.primary}20`, overflow: 'hidden', marginBottom: 8 },
   barFill: { height: '100%', borderRadius: 4 },
   remainText: { fontSize: SIZES.sm, color: COLORS.gray, textAlign: 'right' },
-
-  // edit btn
   editBtn: { marginHorizontal: 16, marginTop: 16, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed', paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   editBtnText: { color: COLORS.primary, fontSize: SIZES.base, fontWeight: FONTS.semiBold },
-
   infoBox: { marginHorizontal: 16, marginTop: 24, backgroundColor: `${COLORS.primary}15`, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   infoText: { flex: 1, fontSize: SIZES.sm, color: COLORS.primaryDark, lineHeight: 20 },
-
-  // bottom nav
-  bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.border, paddingBottom: 8, paddingTop: 4, ...SHADOWS.sm },
-  navItem: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 6 },
-  navIconWrap: { width: 44, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
-  navLabel: { fontSize: 10, color: COLORS.gray, fontWeight: FONTS.medium },
-
-  // modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
   sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
-  
-  // form
   fieldLabel: { fontSize: SIZES.sm, fontWeight: FONTS.semiBold, color: COLORS.dark, marginBottom: 8 },
   inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, paddingHorizontal: 16, height: 56, marginBottom: 24, backgroundColor: COLORS.bg },
   currencyPrefix: { fontSize: SIZES.base, color: COLORS.gray, marginRight: 8, fontWeight: FONTS.bold },
   amountInput: { flex: 1, fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.bold },
   saveBtn: { backgroundColor: COLORS.primary, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', ...SHADOWS.md },
   saveBtnText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
-
-  // list empty
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 },
   notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
@@ -416,3 +360,4 @@ const getStyles = (COLORS) => StyleSheet.create({
   notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
 });
+

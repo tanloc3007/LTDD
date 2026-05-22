@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler'; // phải là dòng đầu tiên
 import React from 'react';
+import { Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
@@ -13,11 +14,79 @@ import BudgetScreen from './screens/BudgetScreen';
 import LimitScreen from './screens/LimitScreen';
 import AIChatScreen from './screens/AIChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import CreateBudgetScreen from './screens/CreateBudgetScreen.js';
+import SetBudgetAmountScreen from './screens/SetBudgetAmountScreen.js';
+import AddCategoryScreen from './screens/AddCategoryScreen.js';
+import SavingGoalScreen from './screens/SavingGoalScreen.js';
+import GroupWalletScreen from './screens/GroupWalletScreen.js';
+import GroupDetailScreen from './screens/GroupDetailScreen.js';
+import HealthScoreScreen from './screens/HealthScoreScreen.js';
+import OCRScanScreen from './screens/OCRScanScreen.js';
+import RecurringScreen from './screens/RecurringScreen.js';
 import { AuthProvider } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 
 const Stack = createStackNavigator();
+
+const smoothScreenTransition = {
+  animation: 'timing',
+  config: {
+    duration: 300,
+    easing: Easing.out(Easing.poly(4)),
+  },
+};
+
+const tabRoutes = new Set(['Home', 'Transaction', 'Stats', 'Budget', 'Profile', 'SavingGoal', 'GroupWallet']);
+
+const createCardStyleInterpolator = (route) => ({ current, layouts }) => {
+  const isTabRoute = tabRoutes.has(route.name);
+  const direction = route.params?.tabTransitionDirection || 1;
+  const travel = isTabRoute ? layouts.screen.width * 0.12 : 18;
+
+  return {
+    cardStyle: {
+      opacity: current.progress.interpolate({
+        inputRange: [0, 0.45, 1],
+        outputRange: [0, 0.96, 1],
+        extrapolate: 'clamp',
+      }),
+      transform: isTabRoute
+        ? [
+            {
+              translateX: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [direction * travel, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            {
+              scale: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.992, 1],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]
+        : [
+            {
+              translateY: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [travel, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            {
+              scale: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.985, 1],
+                extrapolate: 'clamp',
+              }),
+            },
+          ],
+    },
+  };
+};
 
 export default function App() {
   return (
@@ -26,20 +95,37 @@ export default function App() {
         <SettingsProvider>
           <NavigationContainer>
             <StatusBar style="dark" />
-          <Stack.Navigator
-            initialRouteName="Login"
-            screenOptions={{ headerShown: false }}
-          >
-            <Stack.Screen name="Login"    component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="Home"     component={HomeScreen} />
-            <Stack.Screen name="Transaction" component={TransactionScreen} />
-            <Stack.Screen name="Stats" component={StatsScreen} />
-            <Stack.Screen name="Budget" component={BudgetScreen} />
-            <Stack.Screen name="Limit" component={LimitScreen} />
-            <Stack.Screen name="AIChat" component={AIChatScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-          </Stack.Navigator>
+            <Stack.Navigator
+              initialRouteName="Login"
+              screenOptions={({ route }) => ({
+                headerShown: false,
+                gestureEnabled: true,
+                transitionSpec: {
+                  open: smoothScreenTransition,
+                  close: smoothScreenTransition,
+                },
+                cardStyleInterpolator: createCardStyleInterpolator(route),
+              })}
+            >
+              <Stack.Screen name="Login"    component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="Home"     component={HomeScreen} />
+              <Stack.Screen name="Transaction" component={TransactionScreen} />
+              <Stack.Screen name="Stats" component={StatsScreen} />
+              <Stack.Screen name="Budget" component={BudgetScreen} />
+              <Stack.Screen name="Limit" component={LimitScreen} />
+              <Stack.Screen name="AIChat" component={AIChatScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />
+              <Stack.Screen name="SetBudgetAmount" component={SetBudgetAmountScreen} />
+              <Stack.Screen name="AddCategory" component={AddCategoryScreen} />
+              <Stack.Screen name="SavingGoal" component={SavingGoalScreen} />
+              <Stack.Screen name="GroupWallet" component={GroupWalletScreen} />
+              <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+              <Stack.Screen name="HealthScore" component={HealthScoreScreen} />
+              <Stack.Screen name="OCRScan" component={OCRScanScreen} />
+              <Stack.Screen name="Recurring" component={RecurringScreen} />
+            </Stack.Navigator>
           </NavigationContainer>
         </SettingsProvider>
       </FinanceProvider>

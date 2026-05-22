@@ -53,6 +53,8 @@ cloudinary.config({
 });
 >>>>>>> Stashed changes
 
+// ---- SCHEMAS ----
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -92,7 +94,7 @@ const notificationSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     message: { type: String, required: true },
-    type: { type: String, enum: ['expense', 'income', 'budget_warning', 'budget_over', 'other'], default: 'other' },
+    type: { type: String, enum: ['expense', 'income', 'budget_warning', 'budget_over', 'recurring', 'other'], default: 'other' },
     read: { type: Boolean, default: false },
   },
   { timestamps: true }
@@ -107,11 +109,91 @@ const globalLimitSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const categorySchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    label: { type: String, required: true },
+    icon: { type: String, default: 'apps' },
+    color: { type: String, default: '#8892A4' },
+    type: { type: String, enum: ['expense', 'income'], default: 'expense' },
+  },
+  { timestamps: true }
+);
+
+// ---- NEW SCHEMAS ----
+
+const savingGoalSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    title: { type: String, required: true },
+    icon: { type: String, default: 'save' },
+    color: { type: String, default: '#E91E8C' },
+    targetAmount: { type: Number, required: true, min: 0 },
+    currentAmount: { type: Number, default: 0 },
+    deadline: { type: Date, required: true },
+    status: { type: String, enum: ['active', 'completed', 'failed'], default: 'active' },
+  },
+  { timestamps: true }
+);
+
+const groupWalletSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    code: { type: String, unique: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    members: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        name: { type: String },
+        joinedAt: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+const groupExpenseSchema = new mongoose.Schema(
+  {
+    groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'GroupWallet', required: true, index: true },
+    amount: { type: Number, required: true },
+    category: { type: String, required: true },
+    note: { type: String, default: '' },
+    date: { type: String, required: true },
+    paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    paidByName: { type: String },
+  },
+  { timestamps: true }
+);
+
+const recurringTransactionSchema = new mongoose.Schema(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    amount: { type: Number, required: true },
+    type: { type: String, enum: ['expense', 'income'] },
+    category: { type: String, required: true },
+    note: { type: String, default: '' },
+    frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], required: true },
+    dayOfMonth: { type: Number, min: 1, max: 31 }, // for monthly
+    nextRunDate: { type: Date, required: true },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true }
+);
+
+// ---- MODELS ----
+
 const User = mongoose.model('User', userSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const BudgetCategory = mongoose.model('BudgetCategory', budgetCategorySchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 const GlobalLimit = mongoose.model('GlobalLimit', globalLimitSchema);
+const Category = mongoose.model('Category', categorySchema);
+const SavingGoal = mongoose.model('SavingGoal', savingGoalSchema);
+const GroupWallet = mongoose.model('GroupWallet', groupWalletSchema);
+const GroupExpense = mongoose.model('GroupExpense', groupExpenseSchema);
+const RecurringTransaction = mongoose.model('RecurringTransaction', recurringTransactionSchema);
+
+// ---- HELPERS ----
 
 function createToken(user) {
   return jwt.sign({ userId: user._id.toString() }, JWT_SECRET, { expiresIn: '7d' });
@@ -137,22 +219,72 @@ function mapTransaction(transaction) {
   };
 }
 
+function generateGroupCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function calcNextRunDate(frequency, dayOfMonth) {
+  const now = new Date();
+  if (frequency === 'daily') {
+    const next = new Date(now);
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  } else if (frequency === 'weekly') {
+    const next = new Date(now);
+    next.setDate(next.getDate() + 7);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  } else if (frequency === 'monthly') {
+    const day = dayOfMonth || 1;
+    const candidate = new Date(now.getFullYear(), now.getMonth(), day, 0, 0, 0, 0);
+    if (candidate <= now) {
+      candidate.setMonth(candidate.getMonth() + 1);
+    }
+    return candidate;
+  }
+  return new Date(now.setDate(now.getDate() + 1));
+}
+
+function advanceNextRunDate(frequency, dayOfMonth, fromDate) {
+  const base = new Date(fromDate);
+  if (frequency === 'daily') {
+    base.setDate(base.getDate() + 1);
+    return base;
+  } else if (frequency === 'weekly') {
+    base.setDate(base.getDate() + 7);
+    return base;
+  } else if (frequency === 'monthly') {
+    const day = dayOfMonth || 1;
+    const next = new Date(base.getFullYear(), base.getMonth() + 1, day, 0, 0, 0, 0);
+    return next;
+  }
+  return base;
+}
+
 async function authRequired(req, res, next) {
   try {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ message: 'Chưa đăng nhập.' });
+    if (!token) return res.status(401).json({ message: 'Chua dang nhap.' });
 
     const payload = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(payload.userId);
-    if (!user) return res.status(401).json({ message: 'Tài khoản không tồn tại.' });
+    if (!user) return res.status(401).json({ message: 'Tai khoan khong ton tai.' });
 
     req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Phiên đăng nhập không hợp lệ.' });
+    return res.status(401).json({ message: 'Phien dang nhap khong hop le.' });
   }
 }
+
+// ---- ROUTES ----
 
 app.get('/health', (req, res) => {
   res.json({ ok: true });
@@ -162,15 +294,15 @@ app.post('/auth/register', async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
     if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin.' });
+      return res.status(400).json({ message: 'Vui long nhap day du thong tin.' });
     }
     if (password.length < 6) {
-      return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 6 ký tự.' });
+      return res.status(400).json({ message: 'Mat khau phai co it nhat 6 ky tu.' });
     }
 
     const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
     if (existing) {
-      return res.status(409).json({ message: 'Email này đã được đăng ký.' });
+      return res.status(409).json({ message: 'Email nay da duoc dang ky.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -179,7 +311,7 @@ app.post('/auth/register', async (req, res) => {
 
     return res.status(201).json({ user: sanitizeUser(user), token });
   } catch (error) {
-    return res.status(500).json({ message: 'Không thể đăng ký tài khoản.' });
+    return res.status(500).json({ message: 'Khong the dang ky tai khoan.' });
   }
 });
 
@@ -187,22 +319,22 @@ app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu.' });
+      return res.status(400).json({ message: 'Vui long nhap email va mat khau.' });
     }
 
     const user = await User.findOne({ email: String(email).toLowerCase().trim() });
     if (!user) {
-      return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng.' });
+      return res.status(401).json({ message: 'Email hoac mat khau khong dung.' });
     }
 
     const passwordOk = await bcrypt.compare(password, user.passwordHash);
     if (!passwordOk) {
-      return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng.' });
+      return res.status(401).json({ message: 'Email hoac mat khau khong dung.' });
     }
 
     return res.json({ user: sanitizeUser(user), token: createToken(user) });
   } catch (error) {
-    return res.status(500).json({ message: 'Không thể đăng nhập.' });
+    return res.status(500).json({ message: 'Khong the dang nhap.' });
   }
 });
 
@@ -302,7 +434,7 @@ app.post('/transactions', authRequired, async (req, res) => {
   try {
     const { amount, type, category, note, date } = req.body;
     if (!amount || !type || !category || !date) {
-      return res.status(400).json({ message: 'Thiếu thông tin giao dịch.' });
+      return res.status(400).json({ message: 'Thieu thong tin giao dich.' });
     }
 
     const transaction = await Transaction.create({
@@ -335,9 +467,9 @@ app.post('/transactions', authRequired, async (req, res) => {
         }).reduce((s, t) => s + t.amount, 0);
 
         if (total > budget.budgetAmount) {
-          await Notification.create({ userId: req.user._id, message: `⚠️ Vượt ngân sách danh mục "${budget.label}" ${Number(total - budget.budgetAmount).toLocaleString('vi-VN')}đ!`, type: 'budget_over' });
+          await Notification.create({ userId: req.user._id, message: `Vuot ngan sach danh muc "${budget.label}" ${Number(total - budget.budgetAmount).toLocaleString('vi-VN')}d!`, type: 'budget_over' });
         } else if (total / budget.budgetAmount >= 0.8) {
-          await Notification.create({ userId: req.user._id, message: `⚡ Đã dùng ${Math.round(total / budget.budgetAmount * 100)}% ngân sách "${budget.label}"`, type: 'budget_warning' });
+          await Notification.create({ userId: req.user._id, message: `Da dung ${Math.round(total / budget.budgetAmount * 100)}% ngan sach "${budget.label}"`, type: 'budget_warning' });
         }
       }
 
@@ -352,18 +484,18 @@ app.post('/transactions', authRequired, async (req, res) => {
         }).reduce((s, t) => s + t.amount, 0);
 
         if (allTotal > globalLimit.limitAmount * 1.2) {
-          await Notification.create({ userId: req.user._id, message: `🚨 CẢNH BÁO ĐỎ: Tổng chi tiêu đã vượt quá 120% hạn mức tháng! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+          await Notification.create({ userId: req.user._id, message: `CANH BAO DO: Tong chi tieu da vuot qua 120% han muc thang! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}d)`, type: 'budget_over' });
         } else if (allTotal > globalLimit.limitAmount) {
-          await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng này! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+          await Notification.create({ userId: req.user._id, message: `Vuot han muc tong thang nay! (${Number(allTotal - globalLimit.limitAmount).toLocaleString('vi-VN')}d)`, type: 'budget_over' });
         } else if (allTotal / globalLimit.limitAmount >= 0.8) {
-          await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu đã đạt ${Math.round(allTotal / globalLimit.limitAmount * 100)}% hạn mức tháng`, type: 'budget_warning' });
+          await Notification.create({ userId: req.user._id, message: `Canh bao: Tong chi tieu da dat ${Math.round(allTotal / globalLimit.limitAmount * 100)}% han muc thang`, type: 'budget_warning' });
         }
       }
     }
 
     res.status(201).json({ transaction: mapTransaction(transaction) });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể lưu giao dịch.' });
+    res.status(500).json({ message: 'Khong the luu giao dich.' });
   }
 });
 
@@ -375,16 +507,16 @@ app.put('/transactions/:id', authRequired, async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    if (!transaction) return res.status(404).json({ message: 'Không tìm thấy giao dịch.' });
+    if (!transaction) return res.status(404).json({ message: 'Khong tim thay giao dich.' });
     res.json({ transaction: mapTransaction(transaction) });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể cập nhật giao dịch.' });
+    res.status(500).json({ message: 'Khong the cap nhat giao dich.' });
   }
 });
 
 app.delete('/transactions/:id', authRequired, async (req, res) => {
   const transaction = await Transaction.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-  if (!transaction) return res.status(404).json({ message: 'Không tìm thấy giao dịch.' });
+  if (!transaction) return res.status(404).json({ message: 'Khong tim thay giao dich.' });
   res.json({ ok: true });
 });
 
@@ -401,7 +533,7 @@ app.post('/limits', authRequired, async (req, res) => {
   try {
     const { limitAmount, month } = req.body;
     if (!limitAmount || !month) {
-      return res.status(400).json({ message: 'Thiếu thông tin hạn mức.' });
+      return res.status(400).json({ message: 'Thieu thong tin han muc.' });
     }
     const limit = await GlobalLimit.findOneAndUpdate(
       { userId: req.user._id, month },
@@ -409,7 +541,6 @@ app.post('/limits', authRequired, async (req, res) => {
       { new: true, upsert: true }
     );
 
-    // Check if total expense exceeds this new limit
     const allTxs = await Transaction.find({ userId: req.user._id, type: 'expense' });
     const allTotal = allTxs.filter(t => {
       const tParts = String(t.date).split('/');
@@ -418,16 +549,16 @@ app.post('/limits', authRequired, async (req, res) => {
     }).reduce((s, t) => s + t.amount, 0);
 
     if (allTotal > limit.limitAmount * 1.2) {
-      await Notification.create({ userId: req.user._id, message: `🚨 CẢNH BÁO ĐỎ: Tổng chi tiêu đã vượt quá 120% hạn mức tháng vừa thiết lập! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+      await Notification.create({ userId: req.user._id, message: `CANH BAO DO: Tong chi tieu da vuot qua 120% han muc thang vua thiet lap! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}d)`, type: 'budget_over' });
     } else if (allTotal > limit.limitAmount) {
-      await Notification.create({ userId: req.user._id, message: `⚠️ Vượt hạn mức tổng tháng vừa thiết lập! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}đ)`, type: 'budget_over' });
+      await Notification.create({ userId: req.user._id, message: `Vuot han muc tong thang vua thiet lap! (${Number(allTotal - limit.limitAmount).toLocaleString('vi-VN')}d)`, type: 'budget_over' });
     } else if (allTotal / limit.limitAmount >= 0.8) {
-      await Notification.create({ userId: req.user._id, message: `⚡ Cảnh báo: Tổng chi tiêu hiện tại đã đạt ${Math.round(allTotal / limit.limitAmount * 100)}% hạn mức tháng vừa thiết lập`, type: 'budget_warning' });
+      await Notification.create({ userId: req.user._id, message: `Canh bao: Tong chi tieu hien tai da dat ${Math.round(allTotal / limit.limitAmount * 100)}% han muc thang vua thiet lap`, type: 'budget_warning' });
     }
 
     res.status(200).json({ limit });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể tạo hạn mức.' });
+    res.status(500).json({ message: 'Khong the tao han muc.' });
   }
 });
 
@@ -444,16 +575,16 @@ app.post('/budgets', authRequired, async (req, res) => {
   try {
     const { categoryId, label, icon, color, budgetAmount, month } = req.body;
     if (!categoryId || !label || !budgetAmount || !month) {
-      return res.status(400).json({ message: 'Thiếu thông tin ngân sách.' });
+      return res.status(400).json({ message: 'Thieu thong tin ngan sach.' });
     }
     const exists = await BudgetCategory.findOne({ userId: req.user._id, categoryId, month });
     if (exists) {
-      return res.status(409).json({ message: 'Danh mục này đã có ngân sách trong tháng.' });
+      return res.status(409).json({ message: 'Danh muc nay da co ngan sach trong thang.' });
     }
     const budget = await BudgetCategory.create({ userId: req.user._id, categoryId, label, icon, color, budgetAmount, month });
     res.status(201).json({ budget });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể tạo ngân sách.' });
+    res.status(500).json({ message: 'Khong the tao ngan sach.' });
   }
 });
 
@@ -464,16 +595,16 @@ app.put('/budgets/:id', authRequired, async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     );
-    if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách.' });
+    if (!budget) return res.status(404).json({ message: 'Khong tim thay ngan sach.' });
     res.json({ budget });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể cập nhật ngân sách.' });
+    res.status(500).json({ message: 'Khong the cap nhat ngan sach.' });
   }
 });
 
 app.delete('/budgets/:id', authRequired, async (req, res) => {
   const budget = await BudgetCategory.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-  if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách.' });
+  if (!budget) return res.status(404).json({ message: 'Khong tim thay ngan sach.' });
   res.json({ ok: true });
 });
 
@@ -494,12 +625,41 @@ app.post('/notifications/read-all', authRequired, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.delete('/notifications/:id', authRequired, async (req, res) => {
+  await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+  res.json({ ok: true });
+});
+
+// ---- CATEGORIES ----
+app.get('/categories', authRequired, async (req, res) => {
+  const categories = await Category.find({ userId: req.user._id }).sort({ createdAt: 1 });
+  res.json({ categories });
+});
+
+app.post('/categories', authRequired, async (req, res) => {
+  try {
+    const { label, icon, color, type } = req.body;
+    if (!label) return res.status(400).json({ message: 'Ten danh muc khong duoc de trong.' });
+    
+    const category = await Category.create({
+      userId: req.user._id,
+      label,
+      icon: icon || 'apps',
+      color: color || '#8892A4',
+      type: type || 'expense',
+    });
+    res.status(201).json({ category });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the tao danh muc.' });
+  }
+});
+
 // ---- USER PROFILE & SETTINGS ----
 app.put('/user/profile', authRequired, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
-      return res.status(400).json({ message: 'Tên không được để trống.' });
+      return res.status(400).json({ message: 'Ten khong duoc de trong.' });
     }
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -508,7 +668,7 @@ app.put('/user/profile', authRequired, async (req, res) => {
     );
     res.json({ user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể cập nhật hồ sơ.' });
+    res.status(500).json({ message: 'Khong the cap nhat ho so.' });
   }
 });
 
@@ -516,24 +676,24 @@ app.put('/auth/change-password', authRequired, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword) {
-      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ mật khẩu cũ và mới.' });
+      return res.status(400).json({ message: 'Vui long nhap day du mat khau cu va moi.' });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
+      return res.status(400).json({ message: 'Mat khau moi phai co it nhat 6 ky tu.' });
     }
 
     const user = await User.findById(req.user._id);
     const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Mật khẩu cũ không chính xác.' });
+      return res.status(400).json({ message: 'Mat khau cu khong chinh xac.' });
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await user.save();
     
-    res.json({ ok: true, message: 'Đổi mật khẩu thành công.' });
+    res.json({ ok: true, message: 'Doi mat khau thanh cong.' });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể đổi mật khẩu.' });
+    res.status(500).json({ message: 'Khong the doi mat khau.' });
   }
 });
 
@@ -545,25 +705,10 @@ app.delete('/user/data', authRequired, async (req, res) => {
     await GlobalLimit.deleteMany({ userId });
     await Notification.deleteMany({ userId });
     
-    // Add a system note
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const year = today.getFullYear();
-    const dateStr = `${day}/${month}/${year}`;
 
-    await Transaction.create({
-      userId,
-      amount: 0,
-      type: 'expense',
-      category: 'other',
-      note: 'Đã xóa toàn bộ dữ liệu',
-      date: dateStr
-    });
-
-    res.json({ ok: true, message: 'Đã xóa toàn bộ dữ liệu.' });
+    res.json({ ok: true, message: 'Da xoa toan bo du lieu.' });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể xóa dữ liệu.' });
+    res.status(500).json({ message: 'Khong the xoa du lieu.' });
   }
 });
 
@@ -582,7 +727,7 @@ app.get('/user/export', authRequired, async (req, res) => {
       notifications
     });
   } catch (error) {
-    res.status(500).json({ message: 'Không thể xuất dữ liệu.' });
+    res.status(500).json({ message: 'Khong the xuat du lieu.' });
   }
 });
 
@@ -611,10 +756,10 @@ app.post('/user/import', authRequired, async (req, res) => {
       await Notification.insertMany(notifications.map(n => ({ ...n, userId, _id: undefined })));
     }
 
-    res.json({ ok: true, message: 'Phục hồi dữ liệu thành công.' });
+    res.json({ ok: true, message: 'Phuc hoi du lieu thanh cong.' });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Không thể phục hồi dữ liệu.' });
+    res.status(500).json({ message: 'Khong the phuc hoi du lieu.' });
   }
 });
 
@@ -626,11 +771,11 @@ app.post('/ai-chat', authRequired, async (req, res) => {
     const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
     if (!apiKey) {
-      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập trên server.' });
+      return res.status(500).json({ message: 'GROQ_API_KEY chua duoc thiet lap tren server.' });
     }
 
     const promptContext = `
-      Ban la mot tro ly tai chinh thong minh cua ung dung MoMo Finance.
+      Ban la mot tro ly tai chinh thong minh cua ung dung FinancialManagement Finance.
       Nguoi dung ten la ${req.user.name}.
       Du lieu tai chinh hien tai cua nguoi dung:
       - Tong giao dich: ${contextData?.totalTransactions || 0}
@@ -661,7 +806,7 @@ app.post('/ai-chat', authRequired, async (req, res) => {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Groq Error:', errorData);
-      return res.status(500).json({ message: 'Lỗi từ Groq API.' });
+      return res.status(500).json({ message: 'Loi tu Groq API.' });
     }
 
     const data = await response.json();
@@ -674,13 +819,639 @@ app.post('/ai-chat', authRequired, async (req, res) => {
   }
 });
 
-app.delete('/notifications/:id', authRequired, async (req, res) => {
-  await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-  res.json({ ok: true });
+// ---- AI BUDGET SUGGESTIONS ----
+app.post('/ai-budget-suggestions', authRequired, async (req, res) => {
+  try {
+    const { income, expenses, currentBudgets } = req.body;
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GROQ_API_KEY chua duoc thiet lap tren server.' });
+    }
+
+    const systemPrompt = `
+      Ban la chuyen gia tu van tai chinh ca nhan. Nhiem vu cua ban la dua ra goi y ngan sach chi tieu.
+      CHI TRA VE DU LIEU DUOI DANG MANG JSON. TUYET DOI KHONG GIAI THICH, KHONG CHAO HOI.
+      
+      Dinh dang mang JSON:
+      [
+        {"id": "suggest_1", "label": "An uong", "suggestion": "2.000.000d", "icon": "restaurant", "color": "#FF6B35"},
+        {"id": "suggest_2", "label": "Mua sam", "suggestion": "1.500.000d", "icon": "cart", "color": "#FF9500"},
+        {"id": "suggest_3", "label": "Di chuyen", "suggestion": "1.000.000d", "icon": "car", "color": "#178BFF"}
+      ]
+      
+      Quy tac:
+      - "id" la duy nhat.
+      - "label" la ten danh muc.
+      - "suggestion" la so tien kem d (vd: 500.000d).
+      - "icon" la ten icon tu Ionicons (restaurant, cart, car, leaf, play-circle, receipt, book, brush, body, home, heart, wallet).
+      - "color" la ma mau HEX.
+    `;
+
+    const userPrompt = `
+      Du lieu nguoi dung:
+      - Thu nhap: ${income}
+      - Chi tieu: ${expenses}
+      - Ngan sach hien tai: ${currentBudgets || 'Chua co'}
+      
+      Hay goi y 3 muc ngan sach phu hop nhat. Chi tra ve JSON.
+    `;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 500,
+        temperature: 0
+      })
+    });
+
+    if (!response.ok) return res.status(500).json({ message: 'Loi API AI.' });
+
+    const data = await response.json();
+    let text = data.choices[0].message.content.trim();
+    
+    // Extract JSON array
+    const startBracket = text.indexOf('[');
+    const endBracket = text.lastIndexOf(']');
+    
+    if (startBracket !== -1 && endBracket !== -1 && startBracket < endBracket) {
+      text = text.substring(startBracket, endBracket + 1);
+    }
+
+    try {
+      const suggestions = JSON.parse(text);
+      res.json({ suggestions });
+    } catch (e) {
+      console.error('Parse AI JSON failed. Text received:', text);
+      res.status(500).json({ message: 'AI tra ve dinh dang khong hop le.' });
+    }
+  } catch (error) {
+    console.error('AI Suggestion Error:', error);
+    res.status(500).json({ message: 'Co loi xay ra.' });
+  }
 });
 
-// Hook: auto-create notification when transaction added is merged into POST /transactions
+// ---- SAVING GOALS ----
+app.get('/saving-goals', authRequired, async (req, res) => {
+  try {
+    const goals = await SavingGoal.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    res.json({ goals });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the lay danh sach hu tiet kiem.' });
+  }
+});
 
+app.post('/saving-goals', authRequired, async (req, res) => {
+  try {
+    const { title, icon, color, targetAmount, deadline } = req.body;
+    if (!title || !targetAmount || !deadline) {
+      return res.status(400).json({ message: 'Thieu thong tin hu tiet kiem.' });
+    }
+    const goal = await SavingGoal.create({
+      userId: req.user._id,
+      title,
+      icon: icon || 'save',
+      color: color || '#E91E8C',
+      targetAmount,
+      deadline: new Date(deadline),
+    });
+    res.status(201).json({ goal });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the tao hu tiet kiem.' });
+  }
+});
+
+app.put('/saving-goals/:id', authRequired, async (req, res) => {
+  try {
+    const goal = await SavingGoal.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!goal) return res.status(404).json({ message: 'Khong tim thay hu tiet kiem.' });
+    res.json({ goal });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the cap nhat hu tiet kiem.' });
+  }
+});
+
+app.delete('/saving-goals/:id', authRequired, async (req, res) => {
+  try {
+    const goal = await SavingGoal.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ message: 'Khong tim thay hu tiet kiem.' });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the xoa hu tiet kiem.' });
+  }
+});
+
+app.post('/saving-goals/:id/deposit', authRequired, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'So tien khong hop le.' });
+    }
+    const goal = await SavingGoal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ message: 'Khong tim thay hu tiet kiem.' });
+
+    goal.currentAmount = (goal.currentAmount || 0) + Number(amount);
+    if (goal.currentAmount >= goal.targetAmount) {
+      goal.status = 'completed';
+    }
+    await goal.save();
+    res.json({ goal });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the nap tien vao hu.' });
+  }
+});
+
+app.post('/saving-goals/:id/withdraw', authRequired, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'So tien khong hop le.' });
+    }
+    const goal = await SavingGoal.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!goal) return res.status(404).json({ message: 'Khong tim thay hu tiet kiem.' });
+
+    if (Number(amount) > goal.currentAmount) {
+      return res.status(400).json({ message: 'So du trong hu khong du.' });
+    }
+    goal.currentAmount = goal.currentAmount - Number(amount);
+    if (goal.status === 'completed' && goal.currentAmount < goal.targetAmount) {
+      goal.status = 'active';
+    }
+    await goal.save();
+    res.json({ goal });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the rut tien tu hu.' });
+  }
+});
+
+// ---- GROUP WALLET ----
+app.post('/group-wallet', authRequired, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ message: 'Ten nhom khong duoc de trong.' });
+
+    // Generate unique code
+    let code = generateGroupCode();
+    let existing = await GroupWallet.findOne({ code });
+    while (existing) {
+      code = generateGroupCode();
+      existing = await GroupWallet.findOne({ code });
+    }
+
+    const group = await GroupWallet.create({
+      name,
+      code,
+      createdBy: req.user._id,
+      members: [{ userId: req.user._id, name: req.user.name, joinedAt: new Date() }],
+    });
+    res.status(201).json({ group });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the tao nhom.' });
+  }
+});
+
+app.post('/group-wallet/join', authRequired, async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: 'Vui long nhap ma nhom.' });
+
+    const group = await GroupWallet.findOne({ code: String(code).toUpperCase() });
+    if (!group) return res.status(404).json({ message: 'Khong tim thay nhom voi ma nay.' });
+
+    const alreadyMember = group.members.some(m => m.userId.toString() === req.user._id.toString());
+    if (alreadyMember) {
+      return res.status(409).json({ message: 'Ban da la thanh vien cua nhom nay.' });
+    }
+
+    group.members.push({ userId: req.user._id, name: req.user.name, joinedAt: new Date() });
+    await group.save();
+    res.json({ group });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the tham gia nhom.' });
+  }
+});
+
+app.get('/group-wallet', authRequired, async (req, res) => {
+  try {
+    const groups = await GroupWallet.find({ 'members.userId': req.user._id }).sort({ createdAt: -1 });
+    res.json({ groups });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the lay danh sach nhom.' });
+  }
+});
+
+app.get('/group-wallet/:groupId/expenses', authRequired, async (req, res) => {
+  try {
+    const group = await GroupWallet.findOne({ _id: req.params.groupId, 'members.userId': req.user._id });
+    if (!group) return res.status(403).json({ message: 'Ban khong co quyen truy cap nhom nay.' });
+
+    const expenses = await GroupExpense.find({ groupId: req.params.groupId }).sort({ createdAt: -1 });
+    res.json({ expenses });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the lay chi tieu nhom.' });
+  }
+});
+
+app.post('/group-wallet/:groupId/expenses', authRequired, async (req, res) => {
+  try {
+    const group = await GroupWallet.findOne({ _id: req.params.groupId, 'members.userId': req.user._id });
+    if (!group) return res.status(403).json({ message: 'Ban khong co quyen truy cap nhom nay.' });
+
+    const { amount, category, note, date } = req.body;
+    if (!amount || !category || !date) {
+      return res.status(400).json({ message: 'Thieu thong tin chi tieu.' });
+    }
+
+    const expense = await GroupExpense.create({
+      groupId: req.params.groupId,
+      amount,
+      category,
+      note: note || '',
+      date,
+      paidBy: req.user._id,
+      paidByName: req.user.name,
+    });
+    res.status(201).json({ expense });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the them chi tieu nhom.' });
+  }
+});
+
+app.delete('/group-wallet/:groupId/expenses/:expenseId', authRequired, async (req, res) => {
+  try {
+    const group = await GroupWallet.findOne({ _id: req.params.groupId, 'members.userId': req.user._id });
+    if (!group) return res.status(403).json({ message: 'Ban khong co quyen truy cap nhom nay.' });
+
+    const expense = await GroupExpense.findOneAndDelete({
+      _id: req.params.expenseId,
+      groupId: req.params.groupId,
+    });
+    if (!expense) return res.status(404).json({ message: 'Khong tim thay chi tieu.' });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the xoa chi tieu.' });
+  }
+});
+
+app.delete('/group-wallet/:groupId/leave', authRequired, async (req, res) => {
+  try {
+    const group = await GroupWallet.findById(req.params.groupId);
+    if (!group) return res.status(404).json({ message: 'Khong tim thay nhom.' });
+
+    const memberIndex = group.members.findIndex(m => m.userId.toString() === req.user._id.toString());
+    if (memberIndex === -1) return res.status(400).json({ message: 'Ban khong phai thanh vien nhom nay.' });
+
+    group.members.splice(memberIndex, 1);
+    await group.save();
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the roi nhom.' });
+  }
+});
+
+// ---- RECURRING TRANSACTIONS ----
+app.get('/recurring', authRequired, async (req, res) => {
+  try {
+    const recurrings = await RecurringTransaction.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    res.json({ recurrings });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the lay danh sach giao dich dinh ky.' });
+  }
+});
+
+app.post('/recurring', authRequired, async (req, res) => {
+  try {
+    const { amount, type, category, note, frequency, dayOfMonth } = req.body;
+    if (!amount || !type || !category || !frequency) {
+      return res.status(400).json({ message: 'Thieu thong tin giao dich dinh ky.' });
+    }
+
+    const nextRunDate = calcNextRunDate(frequency, dayOfMonth);
+
+    const recurring = await RecurringTransaction.create({
+      userId: req.user._id,
+      amount,
+      type,
+      category,
+      note: note || '',
+      frequency,
+      dayOfMonth: dayOfMonth || undefined,
+      nextRunDate,
+      isActive: true,
+    });
+    res.status(201).json({ recurring });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the tao giao dich dinh ky.' });
+  }
+});
+
+app.put('/recurring/:id', authRequired, async (req, res) => {
+  try {
+    const recurring = await RecurringTransaction.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!recurring) return res.status(404).json({ message: 'Khong tim thay giao dich dinh ky.' });
+    res.json({ recurring });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the cap nhat giao dich dinh ky.' });
+  }
+});
+
+app.delete('/recurring/:id', authRequired, async (req, res) => {
+  try {
+    const recurring = await RecurringTransaction.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!recurring) return res.status(404).json({ message: 'Khong tim thay giao dich dinh ky.' });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the xoa giao dich dinh ky.' });
+  }
+});
+
+app.post('/recurring/process', authRequired, async (req, res) => {
+  try {
+    const now = new Date();
+    const dueRecurrings = await RecurringTransaction.find({
+      userId: req.user._id,
+      isActive: true,
+      nextRunDate: { $lte: now },
+    });
+
+    const createdTransactions = [];
+
+    for (const rec of dueRecurrings) {
+      // Format date as DD/MM/YYYY
+      const d = new Date();
+      const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+      const transaction = await Transaction.create({
+        userId: rec.userId,
+        amount: rec.amount,
+        type: rec.type,
+        category: rec.category,
+        note: rec.note || '',
+        date: dateStr,
+      });
+      createdTransactions.push(mapTransaction(transaction));
+
+      // Advance nextRunDate
+      rec.nextRunDate = advanceNextRunDate(rec.frequency, rec.dayOfMonth, rec.nextRunDate);
+      await rec.save();
+
+      // Create notification
+      await Notification.create({
+        userId: rec.userId,
+        message: `Giao dich dinh ky "${rec.category}" ${rec.type === 'expense' ? 'chi' : 'thu'} ${Number(rec.amount).toLocaleString('vi-VN')}d da duoc xu ly tu dong.`,
+        type: 'recurring',
+      });
+    }
+
+    res.json({ processed: createdTransactions.length, transactions: createdTransactions });
+  } catch (error) {
+    console.error('Recurring process error:', error);
+    res.status(500).json({ message: 'Khong the xu ly giao dich dinh ky.' });
+  }
+});
+
+// ---- FINANCIAL HEALTH SCORE ----
+app.get('/ai/health-score', authRequired, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const now = new Date();
+
+    // Get last 3 months boundaries
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+
+    // Build month keys for last 3 months
+    const monthKeys = [];
+    for (let i = 2; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      monthKeys.push(`${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`);
+    }
+
+    // Get all transactions
+    const allTxs = await Transaction.find({ userId });
+
+    // Filter transactions from last 3 months
+    function getMonthKey(dateStr) {
+      const parts = String(dateStr).split('/');
+      if (parts.length >= 3) {
+        return `${parts[1].padStart(2, '0')}/${parts[2]}`;
+      }
+      return null;
+    }
+
+    const recentTxs = allTxs.filter(t => {
+      const mk = getMonthKey(t.date);
+      return mk && monthKeys.includes(mk);
+    });
+
+    const totalIncome = recentTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalExpense = recentTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+    // Saving rate
+    const saving_rate = totalIncome > 0 ? (totalIncome - totalExpense) / totalIncome : 0;
+
+    // Budget compliance: check current month budgets
+    const currentMonthKey = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const budgets = await BudgetCategory.find({ userId, month: currentMonthKey });
+    let budget_compliance = 1.0;
+    if (budgets.length > 0) {
+      const currentMonthTxs = recentTxs.filter(t => getMonthKey(t.date) === currentMonthKey && t.type === 'expense');
+      let compliantCount = 0;
+      for (const budget of budgets) {
+        const spent = currentMonthTxs.filter(t => t.category === budget.categoryId).reduce((s, t) => s + t.amount, 0);
+        if (spent <= budget.budgetAmount) compliantCount++;
+      }
+      budget_compliance = compliantCount / budgets.length;
+    }
+
+    // Saving goals
+    const activeGoals = await SavingGoal.find({ userId, status: 'active' });
+    const has_saving_goals = activeGoals.length > 0;
+
+    // Balance positive
+    const balance = totalIncome - totalExpense;
+    const balance_positive = balance > 0;
+
+    // Consistency: has transactions in all 3 months
+    const txMonths = new Set(recentTxs.map(t => getMonthKey(t.date)).filter(Boolean));
+    const consistency = monthKeys.every(mk => txMonths.has(mk));
+
+    // Calculate score (base 300)
+    let score = 300;
+
+    // saving_rate: 0% = 0, 20%+ = 200 (linear capped)
+    const savingRateScore = Math.min(200, Math.round((saving_rate / 0.2) * 200));
+    score += Math.max(0, savingRateScore);
+
+    // budget_compliance: 100% = 200
+    const budgetScore = Math.round(budget_compliance * 200);
+    score += budgetScore;
+
+    // has saving goals: 100
+    const goalsScore = has_saving_goals ? 100 : 0;
+    score += goalsScore;
+
+    // balance positive: 150
+    const balanceScore = balance_positive ? 150 : 0;
+    score += balanceScore;
+
+    // consistency: 100
+    const consistencyScore = consistency ? 100 : 0;
+    score += consistencyScore;
+
+    // Cap to 850
+    score = Math.min(850, score);
+
+    // Level
+    let level = 'Kem';
+    if (score >= 750) level = 'Xuat sac';
+    else if (score >= 600) level = 'Tot';
+    else if (score >= 450) level = 'Trung binh';
+
+    // Tips
+    const tips = [];
+    if (saving_rate < 0.1) tips.push('Hay co gang tiet kiem it nhat 10% thu nhap moi thang.');
+    if (saving_rate < 0.2) tips.push('Muc tiet kiem ly tuong la 20% thu nhap. Hay cat giam chi tieu khong can thiet.');
+    if (budget_compliance < 0.8) tips.push('Mot so danh muc chi tieu da vuot ngan sach. Kiem soat chi tieu chat che hon.');
+    if (!has_saving_goals) tips.push('Hay tao it nhat 1 hu tiet kiem de co muc tieu tai chinh ro rang.');
+    if (!balance_positive) tips.push('Chi tieu cua ban dang vuot thu nhap. Can giam chi tieu gap!');
+    if (!consistency) tips.push('Hay cap nhat giao dich deu dan moi thang de theo doi tai chinh tot hon.');
+    if (tips.length === 0) tips.push('Tai chinh cua ban dang rat on. Hay tiep tuc duy tri!');
+
+    res.json({
+      score,
+      level,
+      details: {
+        saving_rate: Math.round(saving_rate * 100),
+        saving_rate_score: Math.max(0, savingRateScore),
+        budget_compliance: Math.round(budget_compliance * 100),
+        budget_compliance_score: budgetScore,
+        has_saving_goals,
+        goals_score: goalsScore,
+        balance_positive,
+        balance_score: balanceScore,
+        consistency,
+        consistency_score: consistencyScore,
+        totalIncome,
+        totalExpense,
+        balance,
+      },
+      tips,
+    });
+  } catch (error) {
+    console.error('Health score error:', error);
+    res.status(500).json({ message: 'Khong the tinh diem suc khoe tai chinh.' });
+  }
+});
+
+// ---- OCR INVOICE ----
+app.post('/transactions/ocr', authRequired, async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ message: 'Thieu du lieu anh.' });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      // Fallback mock data khi chưa có API key
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const yyyy = today.getFullYear();
+      return res.json({
+        amount: 150000,
+        category: 'food',
+        note: 'Hoa don nha hang',
+        date: `${dd}/${mm}/${yyyy}`,
+        items: [{ name: 'Mon an', price: 150000 }],
+      });
+    }
+
+    const prompt = `Ban la mot he thong OCR chuyen phan tich hoa don mua sam. Phan tich hinh anh hoa don nay va tra ve JSON voi dinh dang:
+{
+  "amount": <tong so tien hop dong, so nguyen, don vi VND>,
+  "category": <mot trong cac gia tri: food, transport, shopping, health, entertainment, education, home, other>,
+  "note": <ten cua hang hoac mo ta ngan gon>,
+  "date": <ngay hoa don dinh dang DD/MM/YYYY, neu khong co dung ngay hom nay>,
+  "items": [{"name": "<ten mon>", "price": <gia tien so nguyen>}]
+}
+Chi tra ve JSON thuan tuy, khong them bat ky giai thich hay markdown nao.`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Gemini API error');
+    }
+
+    const data = await response.json();
+    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Extract JSON from response
+    const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Invalid AI response');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Validate and provide defaults
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+
+    res.json({
+      amount: Number(parsed.amount) || 0,
+      category: parsed.category || 'other',
+      note: parsed.note || 'Hoa don mua sam',
+      date: parsed.date || `${dd}/${mm}/${yyyy}`,
+      items: parsed.items || [],
+    });
+  } catch (error) {
+    console.error('OCR Error:', error);
+    // Fallback khi lỗi
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    res.json({
+      amount: 0,
+      category: 'other',
+      note: 'Vui long kiem tra lai',
+      date: `${dd}/${mm}/${yyyy}`,
+      items: [],
+    });
+  }
+});
+
+// ---- START ----
 async function start() {
   if (!MONGODB_URI) {
     throw new Error('Missing MONGODB_URI environment variable.');
