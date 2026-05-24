@@ -32,6 +32,12 @@
       "@react-native-community/datetimepicker",
       "@react-native-google-signin/google-signin",
       [
+        "expo-av",
+        {
+          "microphonePermission": "Cho phép ứng dụng sử dụng micro để nhập giao dịch bằng giọng nói."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Cho phép ứng dụng truy cập ảnh để cập nhật ảnh đại diện.",

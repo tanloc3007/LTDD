@@ -61,7 +61,7 @@ export async function apiRequest(path, options = {}) {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'Khong the ket noi may chu.');
+        throw new Error(data.message || 'Không thể kết nối máy chủ.');
       }
 
       return data;
@@ -79,5 +79,5 @@ export async function apiRequest(path, options = {}) {
     }
   }
 
-  throw lastError || new Error('Khong the ket noi may chu.');
+  throw lastError || new Error('Không thể kết nối máy chủ.');
 }

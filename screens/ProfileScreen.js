@@ -293,7 +293,7 @@ export default function ProfileScreen({ navigation }) {
               fetchTransactions();
               Alert.alert('Thành công', 'Đã khôi phục dữ liệu.');
             } catch (error) {
-              Alert.alert('Lỗi', 'Tệp không hợp lệ hoặc lỗi server.');
+              Alert.alert('Lỗi', 'Tệp không hợp lệ hoặc lỗi máy chủ.');
             } finally {
               setRestoring(false);
             }
@@ -336,12 +336,17 @@ export default function ProfileScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.gray} />
+        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.replace('Home', { tabTransitionDirection: -1 })}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Profile</Text>
-        <TouchableOpacity style={styles.iconBtn} onPress={developingFeature}>
-          <Ionicons name="settings-outline" size={24} color={COLORS.gray} />
+        <Text style={styles.topTitle}>Cá nhân</Text>
+        <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -361,8 +366,8 @@ export default function ProfileScreen({ navigation }) {
               )}
             </View>
           </TouchableOpacity>
-          <Text style={styles.avatarHint}>Chạm vào ảnh để thay đổi avatar</Text>
-          <Text style={styles.userName}>{user?.name || 'Nguoi dung'}</Text>
+          <Text style={styles.avatarHint}>Chạm vào ảnh để thay đổi ảnh đại diện</Text>
+          <Text style={styles.userName}>{user?.name || 'Người dùng'}</Text>
           <Text style={styles.userEmail}>{user?.email || ''}</Text>
           <TouchableOpacity 
             style={styles.editBtn} 
@@ -434,7 +439,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.sectionBox}>
           <SettingItem 
             COLORS={COLORS} icon="help-circle" iconColor={COLORS.primary} 
-            label="Trợ giúp & FAQ" onPress={developingFeature} 
+            label="Trợ giúp & Hỏi đáp" onPress={developingFeature} 
           />
           <SettingItem 
             COLORS={COLORS} icon="star" iconColor={COLORS.warning} 
@@ -464,11 +469,11 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Chọn giao diện</Text>
             <TouchableOpacity style={styles.modalActionRow} onPress={() => { setTheme('light'); setShowThemeModal(false); }}>
-              <Text style={styles.modalActionText}>Sáng (Light Mode)</Text>
+              <Text style={styles.modalActionText}>Sáng</Text>
               {theme === 'light' && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
             </TouchableOpacity>
             <TouchableOpacity style={[styles.modalActionRow, { borderBottomWidth: 0 }]} onPress={() => { setTheme('dark'); setShowThemeModal(false); }}>
-              <Text style={styles.modalActionText}>Tối (Dark Mode)</Text>
+              <Text style={styles.modalActionText}>Tối</Text>
               {theme === 'dark' && <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />}
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalBtnCancelFull} onPress={() => setShowThemeModal(false)}>
@@ -686,14 +691,20 @@ function SettingItem({ COLORS, icon, iconColor, label, value, onPress, isLast, l
 const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
   topBar: {
-    height: 56, backgroundColor: COLORS.white,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    zIndex: 10
+    height: 56,
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  iconBtn: { padding: 4 },
-  topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.primary },
+  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
   scroll: { paddingHorizontal: 16, paddingBottom: 100, paddingTop: 16 },
   
   profileCard: {

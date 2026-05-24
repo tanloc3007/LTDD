@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,6 +41,17 @@ export default function CreateBudgetScreen({ navigation, route }) {
 
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [customCategories, setCustomCategories] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    try {
+      await apiRequest('/notifications/read-all', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (_) { }
+  };
   const [loadingAi, setLoadingAi] = useState(true);
 
   const fetchCustomCategories = async () => {
@@ -79,16 +92,20 @@ export default function CreateBudgetScreen({ navigation, route }) {
         const expenses = currentMonthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
         const budgetsStr = existingBudgets.map(b => `${b.label}: ${formatVnd(b.budgetAmount)}`).join(', ');
 
-        const res = await apiRequest('/ai-budget-suggestions', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-                income: formatVnd(income),
-                expenses: formatVnd(expenses),
-                currentBudgets: budgetsStr
-            })
-        });
+        const [res, nRes] = await Promise.all([
+          apiRequest('/ai-budget-suggestions', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                  income: formatVnd(income),
+                  expenses: formatVnd(expenses),
+                  currentBudgets: budgetsStr
+              })
+          }),
+          apiRequest('/notifications', { headers: { Authorization: `Bearer ${token}` } })
+        ]);
         setAiSuggestions(res.suggestions || []);
+        setNotifications(nRes.notifications || []);
       } catch (err) {
         console.error('AI Suggestion Fetch Error:', err);
       } finally {
@@ -117,23 +134,20 @@ export default function CreateBudgetScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* HEADER */}
-      <View style={s.header}>
-        <View style={s.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Tạo ngân sách</Text>
-        </View>
-        <View style={s.headerRight}>
-          <TouchableOpacity style={s.iconBtn}>
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-          <View style={s.divider} />
-          <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Home')}>
-            <Ionicons name="home-outline" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-        </View>
+      {/* ── HEADER ── */}
+      <View style={s.topBar}>
+        <TouchableOpacity style={s.closeBtn} onPress={() => navigation.navigate('Budget')}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+        </TouchableOpacity>
+        <Text style={s.topTitle}>Tạo ngân sách</Text>
+        <TouchableOpacity style={s.notifBtn} onPress={() => setShowNotifModal(true)}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
+          {unreadCount > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
@@ -141,7 +155,7 @@ export default function CreateBudgetScreen({ navigation, route }) {
         <View style={s.suggestBox}>
             <View style={s.suggestHeader}>
                 <Ionicons name="sparkles" size={18} color={COLORS.primary} />
-                <Text style={s.suggestHeaderText}>FinancialManagement đề xuất</Text>
+                <Text style={s.suggestHeaderText}>Ứng dụng đề xuất</Text>
             </View>
             <Text style={s.suggestSubText}>Đề xuất dựa trên thu nhập và chi tiêu của bạn</Text>
 
@@ -208,33 +222,93 @@ export default function CreateBudgetScreen({ navigation, route }) {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      {/* ═══════════ NOTIFICATION MODAL ═══════════ */}
+      <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
+        <View style={s.overlay}>
+          <View style={s.sheetLg}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>Thông báo</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {unreadCount > 0 && (
+                  <TouchableOpacity onPress={markAllRead}>
+                    <Text style={{ color: COLORS.primary, fontSize: SIZES.sm, fontWeight: FONTS.semiBold }}>
+                      Đọc tất cả
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowNotifModal(false)}>
+                  <Ionicons name="close" size={22} color={COLORS.dark} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {notifications.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 32, gap: 8 }}>
+                <Ionicons name="notifications-off-outline" size={40} color={COLORS.border} />
+                <Text style={{ color: COLORS.gray, fontSize: SIZES.sm, textAlign: 'center', lineHeight: 20 }}>Chưa có thông báo nào.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item._id || item.createdAt}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 8 }}
+                renderItem={({ item }) => {
+                  const iconName = item.type === 'income' ? 'arrow-down-circle' : item.type === 'budget_over' ? 'warning' : item.type === 'budget_warning' ? 'flash' : 'receipt';
+                  const iconColor = item.type === 'income' ? COLORS.success : item.type === 'budget_over' ? COLORS.danger : item.type === 'budget_warning' ? COLORS.warning : COLORS.primary;
+                  return (
+                    <View style={[s.notifItem, !item.read && s.notifUnread]}>
+                      <View style={[s.notifIcon, { backgroundColor: `${iconColor}15` }]}>
+                        <Ionicons name={iconName} size={18} color={iconColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.notifMsg}>{item.message}</Text>
+                        <Text style={s.notifTime}>
+                          {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : ''}
+                        </Text>
+                      </View>
+                      {!item.read && <View style={s.unreadDot} />}
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const getStyles = (COLORS) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  topBar: {
+    height: 56,
     backgroundColor: COLORS.white,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
-  headerRight: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: COLORS.bg,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    justifyContent: 'space-between', 
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  iconBtn: { padding: 4 },
-  divider: { width: 1, height: 16, backgroundColor: COLORS.border, marginHorizontal: 4 },
+  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
+
+  // modal
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetLg: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  notifUnread: { backgroundColor: `${COLORS.primary}05`, borderRadius: 12, paddingHorizontal: 8 },
+  notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
+  notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
   
   scroll: { padding: 16 },
   

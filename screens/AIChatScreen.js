@@ -189,32 +189,37 @@ export default function AIChatScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
-        </TouchableOpacity>
-        <View style={baseStyles.headerTitleRow}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="sparkles" size={18} color={COLORS.primary} />
-          </View>
-          <Text style={styles.headerTitle}>AI Assistant</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        style={baseStyles.chatList}
-        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} colors={COLORS} styles={styles} />
-        ))}
-        {isTyping && <TypingIndicator colors={COLORS} styles={styles} />}
-      </ScrollView>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+          </TouchableOpacity>
+          <View style={baseStyles.headerTitleRow}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="sparkles" size={18} color={COLORS.primary} />
+            </View>
+            <Text style={styles.headerTitle}>Trợ lý AI</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+        <ScrollView
+          ref={scrollRef}
+          style={baseStyles.chatList}
+          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.map((message) => (
+            <MessageBubble key={message.id} message={message} colors={COLORS} styles={styles} />
+          ))}
+          {isTyping && <TypingIndicator colors={COLORS} styles={styles} />}
+        </ScrollView>
+
         <View style={styles.inputArea}>
           <ScrollView
             horizontal

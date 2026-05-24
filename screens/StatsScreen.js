@@ -26,11 +26,11 @@ const screenWidth = Dimensions.get('window').width;
 const chartWidth = Math.min(screenWidth - 48, 340);
 
 const GROUP_CATEGORY_OPTIONS = [
-  { id: 'food', label: 'An uong', icon: 'restaurant', color: '#E91E8C' },
-  { id: 'transport', label: 'Di chuyen', icon: 'car', color: '#178BFF' },
-  { id: 'shopping', label: 'Mua sam', icon: 'bag-handle', color: '#FF9500' },
-  { id: 'health', label: 'Suc khoe', icon: 'heart', color: '#00C853' },
-  { id: 'other', label: 'Khac', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
+  { id: 'food', label: 'Ăn uống', icon: 'restaurant', color: '#E91E8C' },
+  { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
+  { id: 'shopping', label: 'Mua sắm', icon: 'bag-handle', color: '#FF9500' },
+  { id: 'health', label: 'Sức khỏe', icon: 'heart', color: '#00C853' },
+  { id: 'other', label: 'Khác', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
 ];
 
 export default function StatsScreen({ navigation }) {
@@ -152,7 +152,7 @@ export default function StatsScreen({ navigation }) {
   const saveGroupTotal = () => {
     const nextAmount = Number(String(groupTotalInput).replace(/[^0-9]/g, ''));
     if (!nextAmount) {
-      Alert.alert('Thieu so tien', 'Vui long nhap tong so tien hop le.');
+      Alert.alert('Thiếu số tiền', 'Vui lòng nhập tổng số tiền hợp lệ.');
       return;
     }
     setGroupTotalAmount(nextAmount);
@@ -168,7 +168,7 @@ export default function StatsScreen({ navigation }) {
   const addGroupMember = () => {
     const cleanName = newMemberName.trim();
     if (!cleanName) {
-      Alert.alert('Thieu ten', 'Vui long nhap ten thanh vien.');
+      Alert.alert('Thiếu tên', 'Vui lòng nhập tên thành viên.');
       return;
     }
 
@@ -187,7 +187,7 @@ export default function StatsScreen({ navigation }) {
   const upsertGroupCategory = () => {
     const nextAmount = Number(String(groupCategoryAmountInput).replace(/[^0-9]/g, ''));
     if (!nextAmount) {
-      Alert.alert('Thieu so tien', 'Vui long nhap so tien hop le cho danh muc.');
+      Alert.alert('Thiếu số tiền', 'Vui lòng nhập số tiền hợp lệ cho danh mục.');
       return;
     }
 
@@ -211,13 +211,13 @@ export default function StatsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={18} color={COLORS.primary} />
-        </View>
-        <Text style={styles.brand}>FinancialManagement Finance</Text>
-        <TouchableOpacity style={styles.bell} onPress={() => setShowNotifModal(true)}>
-          <Ionicons name="notifications-outline" size={20} color={COLORS.primaryDark} />
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.replace('Home', { tabTransitionDirection: -1 })}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+        </TouchableOpacity>
+        <Text style={styles.topTitle}>Thống kê</Text>
+        <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -228,11 +228,11 @@ export default function StatsScreen({ navigation }) {
 
       <View style={styles.topTabs}>
         <TouchableOpacity style={styles.topTab} onPress={() => setMainTab('personal')}>
-          <Text style={[styles.topTabText, mainTab === 'personal' && styles.topTabTextActive]}>Ca nhan</Text>
+          <Text style={[styles.topTabText, mainTab === 'personal' && styles.topTabTextActive]}>Cá nhân</Text>
           {mainTab === 'personal' && <View style={styles.topTabLine} />}
         </TouchableOpacity>
         <TouchableOpacity style={styles.topTab} onPress={() => setMainTab('group')}>
-          <Text style={[styles.topTabText, mainTab === 'group' && styles.topTabTextActive]}>Nhom</Text>
+          <Text style={[styles.topTabText, mainTab === 'group' && styles.topTabTextActive]}>Nhóm</Text>
           {mainTab === 'group' && <View style={styles.topTabLine} />}
         </TouchableOpacity>
       </View>
@@ -339,13 +339,54 @@ export default function StatsScreen({ navigation }) {
 }
 
 function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, categoryStats, barData, COLORS, styles, formatCurrency, chartConfig }) {
+  const [barTab, setBarTab] = useState('expense'); // Default to 'expense' (Chi)
+
+  const activeColor = barTab === 'income' ? COLORS.success : COLORS.danger;
+
+  // Convert hex color to rgb
+  const hexToRgb = (hex) => {
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `${r}, ${g}, ${b}`;
+  };
+
+  const dynamicChartConfig = useMemo(() => {
+    const rgbStr = hexToRgb(activeColor);
+    return {
+      ...chartConfig,
+      color: (opacity = 1) => `rgba(${rgbStr}, ${opacity})`,
+    };
+  }, [chartConfig, activeColor]);
+
+  const filteredBarData = useMemo(() => {
+    if (!barData || !barData.datasets) return barData;
+
+    const isIncome = barTab === 'income';
+    const datasetIndex = isIncome ? 0 : 1;
+
+    return {
+      labels: barData.labels,
+      datasets: [
+        {
+          data: barData.datasets[datasetIndex]?.data || [],
+          color: (opacity = 1) => activeColor,
+        },
+      ],
+      yAxisSuffix: barData.yAxisSuffix,
+    };
+  }, [barData, barTab, activeColor]);
+
+  const periodLabel = period === 'week' ? 'tuần' : period === 'month' ? 'tháng' : 'năm';
+  const barChartTitle = barTab === 'income' ? `Thu nhập theo ${periodLabel}` : `Chi tiêu theo ${periodLabel}`;
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.periodTabs}>
         {[
-          { id: 'week', label: 'Tuan' },
-          { id: 'month', label: 'Thang' },
-          { id: 'year', label: 'Nam' },
+          { id: 'week', label: 'Tuần' },
+          { id: 'month', label: 'Tháng' },
+          { id: 'year', label: 'Năm' },
         ].map((item) => (
           <TouchableOpacity
             key={item.id}
@@ -358,12 +399,12 @@ function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, 
       </View>
 
       <View style={styles.summaryRow}>
-        <SummaryCard label="Tong Chi" value={formatCurrency(totalExpense)} color={COLORS.danger} styles={styles} />
-        <SummaryCard label="Tong Thu" value={formatCurrency(totalIncome)} color={COLORS.success} styles={styles} />
+        <SummaryCard label="Tổng Chi" value={formatCurrency(totalExpense)} color={COLORS.danger} styles={styles} />
+        <SummaryCard label="Tổng Thu" value={formatCurrency(totalIncome)} color={COLORS.success} styles={styles} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Co cau chi tieu</Text>
+        <Text style={styles.cardTitle}>Cơ cấu chi tiêu</Text>
         {pieData.length ? (
           <PieChart
             data={pieData}
@@ -377,34 +418,50 @@ function PersonalStats({ period, setPeriod, totalExpense, totalIncome, pieData, 
             hasLegend
           />
         ) : (
-          <Text style={styles.emptyState}>Chua co du lieu chi tieu trong bo loc nay.</Text>
+          <Text style={styles.emptyState}>Chưa có dữ liệu chi tiêu trong bộ lọc này.</Text>
         )}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{barData.title}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 }}>
+          <Text style={[styles.cardTitle, { textAlign: 'left', marginBottom: 0 }]}>{barChartTitle}</Text>
+          <View style={styles.miniTabs}>
+            <TouchableOpacity
+              style={[styles.miniTab, barTab === 'income' && styles.miniTabActiveIncome]}
+              onPress={() => setBarTab('income')}
+            >
+              <Text style={[styles.miniTabText, barTab === 'income' && styles.miniTabTextActive]}>Thu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.miniTab, barTab === 'expense' && styles.miniTabActiveExpense]}
+              onPress={() => setBarTab('expense')}
+            >
+              <Text style={[styles.miniTabText, barTab === 'expense' && styles.miniTabTextActive]}>Chi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         <BarChart
-          data={barData}
+          data={filteredBarData}
           width={chartWidth}
           height={190}
-          chartConfig={chartConfig}
+          chartConfig={dynamicChartConfig}
           fromZero
           showBarTops={false}
           withInnerLines={false}
           style={styles.barChart}
           yAxisLabel=""
-          yAxisSuffix={barData.yAxisSuffix}
+          yAxisSuffix={filteredBarData.yAxisSuffix}
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Chi tiet danh muc</Text>
+      <Text style={styles.sectionTitle}>Chi tiết danh mục</Text>
       <View style={styles.detailCard}>
         {categoryStats.length ? (
           categoryStats.map((item) => (
             <CategoryDetail key={item.id} item={item} total={totalExpense} styles={styles} formatCurrency={formatCurrency} />
           ))
         ) : (
-          <Text style={styles.emptyState}>Chua co du lieu chi tieu trong bo loc nay.</Text>
+          <Text style={styles.emptyState}>Chưa có dữ liệu chi tiêu trong bộ lọc này.</Text>
         )}
       </View>
     </ScrollView>
@@ -442,13 +499,13 @@ function GroupStats({
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
             <Ionicons name="receipt" size={18} color={COLORS.primaryDark} />
-            <Text style={styles.cardHeaderTitle}>Chia hoa don nhanh</Text>
+            <Text style={styles.cardHeaderTitle}>Chia hóa đơn nhanh</Text>
           </View>
           <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.gray} />
         </View>
 
         <View style={styles.billBox}>
-          <Text style={styles.billLabel}>Tong so tien</Text>
+          <Text style={styles.billLabel}>Tổng số tiền</Text>
           {editingGroupTotal ? (
             <View>
               <TextInput
@@ -456,15 +513,15 @@ function GroupStats({
                 onChangeText={setGroupTotalInput}
                 keyboardType="numeric"
                 style={styles.totalInput}
-                placeholder="Nhap tong so tien"
+                placeholder="Nhập tổng số tiền"
                 placeholderTextColor={COLORS.lightGray}
               />
               <View style={styles.inlineActions}>
                 <TouchableOpacity style={styles.smallGhostButton} onPress={cancelGroupTotalEdit}>
-                  <Text style={styles.smallGhostText}>Huy</Text>
+                  <Text style={styles.smallGhostText}>Hủy</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.smallPrimaryButton} onPress={saveGroupTotal}>
-                  <Text style={styles.smallPrimaryText}>Luu</Text>
+                  <Text style={styles.smallPrimaryText}>Lưu</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -480,12 +537,12 @@ function GroupStats({
         </View>
 
         <View style={styles.memberHeader}>
-          <Text style={styles.memberLabel}>Thanh vien tham gia</Text>
+          <Text style={styles.memberLabel}>Thành viên tham gia</Text>
           <TouchableOpacity style={styles.addMemberChip} onPress={addGroupMember}>
-            <Text style={styles.addMemberText}>+ Them</Text>
+            <Text style={styles.addMemberText}>+ Thêm</Text>
           </TouchableOpacity>
           <View style={styles.peopleCount}>
-            <Text style={styles.peopleCountText}>{groupMembers.length} nguoi</Text>
+            <Text style={styles.peopleCountText}>{groupMembers.length} người</Text>
           </View>
         </View>
 
@@ -493,7 +550,7 @@ function GroupStats({
           <TextInput
             value={newMemberName}
             onChangeText={setNewMemberName}
-            placeholder="Nhap ten thanh vien"
+            placeholder="Nhập tên thành viên"
             placeholderTextColor={COLORS.lightGray}
             style={styles.memberInput}
           />
@@ -519,7 +576,7 @@ function GroupStats({
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
             <Ionicons name="flame" size={18} color={COLORS.primaryDark} />
-            <Text style={styles.cardHeaderTitle}>Danh muc chi tieu</Text>
+            <Text style={styles.cardHeaderTitle}>Danh mục chi tiêu</Text>
           </View>
           <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.gray} />
         </View>
@@ -547,7 +604,7 @@ function GroupStats({
             value={groupCategoryAmountInput}
             onChangeText={setGroupCategoryAmountInput}
             keyboardType="numeric"
-            placeholder="Nhap so tien cho danh muc"
+            placeholder="Nhập số tiền cho danh mục"
             placeholderTextColor={COLORS.lightGray}
             style={styles.groupCategoryInput}
           />
@@ -570,12 +627,12 @@ function GroupStats({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyState}>Chua co danh muc chi tieu nao.</Text>
+          <Text style={styles.emptyState}>Chưa có danh mục chi tiêu nào.</Text>
         )}
       </View>
 
       <View style={styles.perPersonCard}>
-        <Text style={styles.perPersonLabel}>SO TIEN MOI NGUOI</Text>
+        <Text style={styles.perPersonLabel}>SỐ TIỀN MỖI NGƯỜI</Text>
         <Text style={styles.perPersonAmount}>{formatCurrency(perPersonAmount)}</Text>
       </View>
     </ScrollView>
@@ -655,7 +712,7 @@ function buildWeekBarData(transactions, referenceDate, COLORS) {
     expenseData.push(totals.expense);
   }
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo tuan', COLORS);
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo tuần', COLORS);
 }
 
 function buildMonthBarData(transactions, referenceDate, COLORS) {
@@ -692,7 +749,7 @@ function buildMonthBarData(transactions, referenceDate, COLORS) {
     expenseData.push(totals.expense);
   });
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo thang', COLORS);
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo tháng', COLORS);
 }
 
 function buildYearBarData(transactions, currentDate, COLORS) {
@@ -725,7 +782,7 @@ function buildYearBarData(transactions, currentDate, COLORS) {
     expenseData.push(totals.expense);
   });
 
-  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo nam', COLORS);
+  return buildChartPayload(labels, incomeData, expenseData, 'Thu / Chi theo năm', COLORS);
 }
 
 function sumTransactionsForDay(transactions, targetDate) {
@@ -763,7 +820,7 @@ function buildChartPayload(labels, incomeRaw, expenseRaw, title, COLORS) {
       { data: incomeData, color: () => COLORS.success },
       { data: expenseData, color: () => COLORS.danger },
     ],
-    legend: ['Thu nhap', 'Chi tieu'],
+    legend: ['Thu nhập', 'Chi tiêu'],
     title,
     yAxisSuffix,
   };
@@ -771,28 +828,21 @@ function buildChartPayload(labels, incomeRaw, expenseRaw, title, COLORS) {
 
 const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    height: 52,
+  topBar: {
+    height: 56,
     backgroundColor: COLORS.white,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FDE2EE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brand: { fontSize: SIZES.sm, fontWeight: FONTS.extraBold, color: COLORS.primaryDark },
-  bell: { position: 'relative', padding: 4 },
-  badge: { position: 'absolute', top: 0, right: 0, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  badgeText: { color: '#FFF', fontSize: 8, fontWeight: FONTS.bold },
+  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
   topTabs: { height: 42, backgroundColor: COLORS.white, flexDirection: 'row' },
   topTab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   topTabText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.medium },
@@ -1004,4 +1054,33 @@ const getStyles = (COLORS) => StyleSheet.create({
   notifMsg: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 18, flex: 1 },
   notifTime: { fontSize: SIZES.xs, color: COLORS.lightGray, marginTop: 4 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginTop: 4 },
+  miniTabs: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.bg,
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  miniTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniTabActiveIncome: {
+    backgroundColor: COLORS.success,
+  },
+  miniTabActiveExpense: {
+    backgroundColor: COLORS.danger,
+  },
+  miniTabText: {
+    fontSize: 10,
+    color: COLORS.gray,
+    fontWeight: FONTS.bold,
+  },
+  miniTabTextActive: {
+    color: COLORS.white,
+  },
 });

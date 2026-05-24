@@ -108,7 +108,7 @@ export default function LoginScreen({ navigation }) {
             <View style={styles.logoBox}>
               <Ionicons name="card" size={38} color={COLORS.white} />
             </View>
-            <Text style={styles.appName}>Financial Management</Text>
+            <Text style={styles.appName}>Quản lý tài chính</Text>
             <Text style={styles.tagline}>Quản lý tài chính thông minh</Text>
           </View>
 

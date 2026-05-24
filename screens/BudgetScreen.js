@@ -45,7 +45,7 @@ function parseDate(str) {
 const CATEGORIES = [
     { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
     { id: 'investment', label: 'Đầu tư', icon: 'leaf', color: '#2DCE89' },
-    { id: 'entertainment', label: 'Play-circle', icon: 'play-circle', color: '#F5365C' },
+    { id: 'entertainment', label: 'Giải trí', icon: 'play-circle', color: '#F5365C' },
     { id: 'bills', label: 'Hóa đơn', icon: 'receipt', color: '#00D9D5' },
     { id: 'education', label: 'Học tập', icon: 'book', color: '#9C27B0' },
     { id: 'beauty', label: 'Làm đẹp', icon: 'brush', color: '#FF4FB8' },
@@ -160,20 +160,19 @@ export default function BudgetScreen({ navigation }) {
   return (
     <SafeAreaView style={s.safe}>
       {/* ── HEADER ── */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
+      <View style={s.topBar}>
+        <TouchableOpacity style={s.closeBtn} onPress={() => navigation.replace('Home', { tabTransitionDirection: -1 })}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Ngân sách</Text>
-        <View style={s.headerRight}>
-          <TouchableOpacity style={s.iconBtn}>
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-          <View style={s.headerDivider} />
-          <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Home')}>
-            <Ionicons name="home-outline" size={22} color={COLORS.dark} />
-          </TouchableOpacity>
-        </View>
+        <Text style={s.topTitle}>Ngân sách</Text>
+        <TouchableOpacity style={s.notifBtn} onPress={() => setShowNotifModal(true)}>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.dark} />
+          {unreadCount > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
@@ -345,27 +344,21 @@ const getStyles = (COLORS) => StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: 8 },
 
   // header
-  header: { 
+  topBar: {
+    height: 56,
+    backgroundColor: COLORS.white,
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingHorizontal: 16, 
-    paddingTop: 12, 
-    paddingBottom: 12, 
-    backgroundColor: COLORS.white 
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
-  headerRight: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.bg,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  iconBtn: { padding: 4 },
-  headerDivider: { width: 1, height: 16, backgroundColor: COLORS.border, marginHorizontal: 4 },
+  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  topTitle: { fontSize: SIZES.lg, fontWeight: FONTS.bold, color: COLORS.dark },
+  notifBtn: { position: 'relative', padding: 4, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#FFF', fontSize: 9, fontWeight: FONTS.bold },
 
   // top row
   topRow: { 

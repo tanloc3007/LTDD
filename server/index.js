@@ -720,6 +720,305 @@ app.post('/user/import', authRequired, async (req, res) => {
   }
 });
 
+// ---- AI VOICE ASSISTANT ----
+app.post('/ai-voice-chat', authRequired, async (req, res) => {
+  try {
+    const { audioBase64 } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ message: 'Thiếu dữ liệu âm thanh.' });
+    }
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập.' });
+    }
+
+    const buffer = Buffer.from(audioBase64, 'base64');
+    const file = new File([buffer], 'recording.m4a', { type: 'audio/m4a' });
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', 'whisper-large-v3-turbo');
+    formData.append('language', 'vi');
+
+    const transcriptionResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: formData
+    });
+
+    if (!transcriptionResponse.ok) {
+      const err = await transcriptionResponse.text();
+      console.error('Whisper Transcription Error:', err);
+      return res.status(500).json({ message: 'Lỗi khi dịch giọng nói.' });
+    }
+
+    const transcriptionData = await transcriptionResponse.json();
+    const text = transcriptionData.text;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Không thể nhận diện giọng nói hoặc âm thanh trống.' });
+    }
+
+    const now = new Date();
+    const normalizedTodayDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    const systemPrompt = `
+      Bạn là trợ lý AI chuyên nghiệp phân tích câu nói tiếng Việt để nhập giao dịch.
+      Nhiệm vụ của bạn là trích xuất thông tin giao dịch từ câu nói sau: "${text}"
+      Trả về kết quả duy nhất ở dạng JSON có định dạng sau:
+      {
+        "amount": 150000,
+        "type": "expense",
+        "category": "food",
+        "note": "Mô tả ngắn gọn về giao dịch",
+        "date": "25/05/2026"
+      }
+      Lưu ý:
+      - amount là số tiền nguyên tệ VND dưới dạng số nguyên (không có ký tự khác). Nếu không có số tiền, trả về null.
+      - type có thể là "expense" hoặc "income" (mặc định là "expense").
+      - category phải là một trong các mã danh mục sau: food (ăn uống), transport (di chuyển), bills (hóa đơn), shopping (mua sắm), education (học tập), beauty (làm đẹp), home (nhà cửa), health (sức khỏe), entertainment (giải trí), investment (đầu tư), charity (từ thiện), salary (lương), award (thưởng), gift (quà tặng), other (khác).
+      - date là ngày giao dịch ở định dạng DD/MM/YYYY. Nếu câu nói không đề cập ngày cụ thể, hãy trả về ngày hiện hành (hôm nay là ${normalizedTodayDate}).
+      TUYỆT ĐỐI chỉ trả về JSON, không giải thích hay thêm bớt văn bản nào khác.
+    `;
+
+    const chatResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'user', content: systemPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1
+      })
+    });
+
+    if (!chatResponse.ok) {
+      console.error('Groq parsing error:', await chatResponse.text());
+      return res.status(500).json({ message: 'Lỗi phân tích cú pháp giao dịch.' });
+    }
+
+    const chatData = await chatResponse.json();
+    const resultText = chatData.choices[0].message.content;
+    const parsedData = JSON.parse(resultText);
+
+    res.json({ text, data: parsedData });
+  } catch (error) {
+    console.error('AI Voice Chat Error:', error);
+    res.status(500).json({ message: 'Lỗi xử lý giọng nói.' });
+  }
+});
+
+// ---- AI SCAN RECEIPT ----
+app.post('/ai-scan-receipt', authRequired, async (req, res) => {
+  try {
+    const { image, mimeType } = req.body;
+    if (!image) {
+      return res.status(400).json({ message: 'Thiếu hình ảnh hóa đơn.' });
+    }
+
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập.' });
+    }
+
+    const model = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const mime = mimeType || 'image/jpeg';
+
+    const systemPrompt = `
+      Bạn là trợ lý AI chuyên nghiệp phân tích hóa đơn và biên lai giao dịch.
+      Nhiệm vụ của bạn là trích xuất các thông tin giao dịch từ ảnh hóa đơn được gửi lên.
+      Trả về kết quả duy nhất ở dạng JSON có định dạng sau:
+      {
+        "amount": 150000,
+        "type": "expense",
+        "category": "food",
+        "note": "Mô tả ngắn gọn bằng tiếng Việt về giao dịch (ví dụ: Ăn trưa phở bò, Hoá đơn điện nước...)",
+        "date": "25/05/2026"
+      }
+      Lưu ý:
+      - amount là số tiền nguyên tệ VND dưới dạng số nguyên (không có ký tự nào khác).
+      - type có thể là "expense" hoặc "income" (mặc định là "expense").
+      - category phải là một trong các mã danh mục sau: food (ăn uống), transport (di chuyển), bills (hóa đơn), shopping (mua sắm), education (học tập), beauty (làm đẹp), home (nhà cửa), health (sức khỏe), entertainment (giải trí), investment (đầu tư), charity (từ thiện), salary (lương), award (thưởng), gift (quà tặng), other (khác).
+      - date là ngày giao dịch trên hóa đơn ở định dạng DD/MM/YYYY. Nếu không tìm thấy ngày cụ thể, hãy trả về ngày hiện hành.
+      TUYỆT ĐỐI chỉ trả về JSON, không giải thích hay thêm bớt văn bản nào khác.
+    `;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: systemPrompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mime};base64,${image}`
+                }
+              }
+            ]
+          }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Groq Vision Error:', errText);
+      return res.status(500).json({ message: 'Lỗi từ Groq Vision API.' });
+    }
+
+    const data = await response.json();
+    const resultText = data.choices[0].message.content;
+    const parsedData = JSON.parse(resultText);
+
+    res.json({ data: parsedData });
+  } catch (error) {
+    console.error('Scan Receipt Error:', error);
+    res.status(500).json({ message: 'Không thể xử lý ảnh hóa đơn.' });
+  }
+});
+
+// ---- AI HEALTH CHECK ----
+app.post('/ai-health-check', authRequired, async (req, res) => {
+  try {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: 'GROQ_API_KEY chưa được thiết lập.' });
+    }
+
+    const { month } = req.body;
+    const now = new Date();
+    const targetMonth = month || `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+    const allTxs = await Transaction.find({ userId: req.user._id });
+    const monthTxs = allTxs.filter(t => {
+      const parts = t.date.split('/');
+      if (parts.length >= 3) {
+        return `${parts[1].padStart(2, '0')}/${parts[2]}` === targetMonth;
+      }
+      return false;
+    });
+
+    const income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+    const budgets = await BudgetCategory.find({ userId: req.user._id, month: targetMonth });
+
+    let score = 100;
+
+    if (income > 0) {
+      const savingRate = (income - expense) / income;
+      if (savingRate <= 0) {
+        score -= 30;
+      } else if (savingRate < 0.1) {
+        score -= 20;
+      } else if (savingRate < 0.2) {
+        score -= 10;
+      }
+    } else {
+      if (expense > 0) {
+        score -= 40;
+      } else {
+        score -= 10;
+      }
+    }
+
+    let overBudgetsCount = 0;
+    for (const budget of budgets) {
+      const catExpense = monthTxs
+        .filter(t => t.type === 'expense' && t.category === budget.categoryId)
+        .reduce((s, t) => s + t.amount, 0);
+      if (catExpense > budget.budgetAmount) {
+        overBudgetsCount++;
+      }
+    }
+    score -= Math.min(overBudgetsCount * 15, 45);
+
+    const uniqueDays = new Set(monthTxs.map(t => t.date));
+    if (uniqueDays.size >= 5) {
+      // no deduction
+    } else if (uniqueDays.size >= 3) {
+      score -= 5;
+    } else if (uniqueDays.size >= 1) {
+      score -= 10;
+    } else {
+      score -= 15;
+    }
+
+    score = Math.max(0, Math.min(100, score));
+
+    const budgetsInfo = budgets.map(b => {
+      const catExpense = monthTxs
+        .filter(t => t.type === 'expense' && t.category === b.categoryId)
+        .reduce((s, t) => s + t.amount, 0);
+      return `- ${b.label}: đã chi ${catExpense.toLocaleString('vi-VN')}đ / ngân sách ${b.budgetAmount.toLocaleString('vi-VN')}đ`;
+    }).join('\n');
+
+    const prompt = `
+      Bạn là chuyên gia tư vấn tài chính cá nhân.
+      Hãy phân tích sức khỏe tài chính tháng này của ${req.user.name}:
+      - Điểm số sức khỏe tài chính (ứng dụng tự tính toán dựa trên thuật toán): ${score}/100.
+      - Tổng thu nhập tháng này: ${income.toLocaleString('vi-VN')}đ.
+      - Tổng chi tiêu tháng này: ${expense.toLocaleString('vi-VN')}đ.
+      - Tình hình ngân sách các danh mục:\n${budgetsInfo || 'Chưa thiết lập ngân sách danh mục'}
+      
+      Hãy đưa ra báo cáo chẩn đoán bằng tiếng Việt, ngắn gọn, súc tích và có tính định hướng hành động cao:
+      1. Đánh giá chung (1-2 câu): Nhận xét về điểm số ${score}/100.
+      2. Chẩn đoán vấn đề cụ thể (nếu có): Chỉ ra điểm chưa hợp lý trong chi tiêu, tiết kiệm hay ngân sách.
+      3. Lời khuyên & Nhiệm vụ cụ thể (2-3 gạch đầu dòng): Hành động thực tế cần làm ngay tuần tới để cải thiện điểm số.
+      
+      Hãy định dạng đẹp mắt với các icon thân thiện. Không chào hỏi rườm rà.
+    `;
+
+    const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 600,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Groq Diagnosis error:', await response.text());
+      return res.status(500).json({ message: 'Lỗi khi gọi Groq API.' });
+    }
+
+    const data = await response.json();
+    const diagnosis = data.choices[0].message.content;
+
+    res.json({ score, diagnosis });
+  } catch (error) {
+    console.error('AI Health Check Error:', error);
+    res.status(500).json({ message: 'Lỗi khi kiểm tra sức khỏe tài chính.' });
+  }
+});
+
 // ---- AI CHAT ----
 app.post('/ai-chat', authRequired, async (req, res) => {
   try {

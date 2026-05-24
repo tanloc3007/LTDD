@@ -3,22 +3,22 @@ import { apiRequest } from '../constants/api';
 import { useAuth } from './AuthContext';
 
 export const CATEGORIES = [
-  { id: 'food', label: 'An uong', icon: 'restaurant', color: '#E91E8C' },
-  { id: 'transport', label: 'Di chuyen', icon: 'car', color: '#178BFF' },
-  { id: 'shopping', label: 'Mua sam', icon: 'bag-handle', color: '#FF9500' },
-  { id: 'health', label: 'Suc khoe', icon: 'heart', color: '#00C853' },
-  { id: 'entertainment', label: 'Giai tri', icon: 'game-controller', color: '#18A35B' },
-  { id: 'education', label: 'Giao duc', icon: 'school', color: '#1976FF' },
-  { id: 'home', label: 'Nha cua', icon: 'home', color: '#FF8A00' },
-  { id: 'other', label: 'Khac', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
+  { id: 'food', label: 'Ăn uống', icon: 'restaurant', color: '#E91E8C' },
+  { id: 'transport', label: 'Di chuyển', icon: 'car', color: '#178BFF' },
+  { id: 'shopping', label: 'Mua sắm', icon: 'bag-handle', color: '#FF9500' },
+  { id: 'health', label: 'Sức khỏe', icon: 'heart', color: '#00C853' },
+  { id: 'entertainment', label: 'Giải trí', icon: 'game-controller', color: '#18A35B' },
+  { id: 'education', label: 'Giáo dục', icon: 'school', color: '#1976FF' },
+  { id: 'home', label: 'Nhà cửa', icon: 'home', color: '#FF8A00' },
+  { id: 'other', label: 'Khác', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
 ];
 
 export const INCOME_CATEGORIES = [
-  { id: 'salary', label: 'Luong', icon: 'cash', color: '#008B47' },
-  { id: 'bonus', label: 'Thuong', icon: 'gift', color: '#FF9500' },
-  { id: 'interest', label: 'Lai tiet kiem', icon: 'business', color: '#1976FF' },
-  { id: 'gift', label: 'Qua tang', icon: 'bag-handle', color: '#B0006D' },
-  { id: 'income_other', label: 'Khac', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
+  { id: 'salary', label: 'Lương', icon: 'cash', color: '#008B47' },
+  { id: 'bonus', label: 'Thưởng', icon: 'gift', color: '#FF9500' },
+  { id: 'interest', label: 'Lãi tiết kiệm', icon: 'business', color: '#1976FF' },
+  { id: 'gift', label: 'Quà tặng', icon: 'bag-handle', color: '#B0006D' },
+  { id: 'income_other', label: 'Khác', icon: 'ellipsis-horizontal', color: '#9CA3AF' },
 ];
 
 const FinanceContext = createContext(null);
@@ -52,7 +52,7 @@ export function FinanceProvider({ children }) {
 
   const addTransaction = async (transaction) => {
     if (!token) {
-      throw new Error('Vui long dang nhap de luu du lieu.');
+      throw new Error('Vui lòng đăng nhập để lưu dữ liệu.');
     }
 
     const data = await apiRequest('/transactions', {
@@ -66,7 +66,7 @@ export function FinanceProvider({ children }) {
 
   const updateTransaction = async (id, nextTransaction) => {
     if (!token) {
-      throw new Error('Vui long dang nhap de cap nhat du lieu.');
+      throw new Error('Vui lòng đăng nhập để cập nhật dữ liệu.');
     }
 
     const data = await apiRequest(`/transactions/${id}`, {
@@ -81,7 +81,7 @@ export function FinanceProvider({ children }) {
 
   const deleteTransaction = async (id) => {
     if (!token) {
-      throw new Error('Vui long dang nhap de xoa du lieu.');
+      throw new Error('Vui lòng đăng nhập để xóa dữ liệu.');
     }
     await apiRequest(`/transactions/${id}`, {
       method: 'DELETE',
@@ -115,7 +115,7 @@ export function getCategory(categoryId) {
 }
 
 export function formatVnd(amount) {
-  return `${Number(amount || 0).toLocaleString('vi-VN')}d`;
+  return `${Number(amount || 0).toLocaleString('vi-VN')}đ`;
 }
 
 export function parseTransactionDate(dateString) {

@@ -5,11 +5,11 @@ import { FONTS, SHADOWS } from '../constants/theme';
 import { useSettings } from '../contexts/SettingsContext';
 
 export const APP_TABS = [
-  { id: 'home', label: 'Trang chu', icon: 'home', route: 'Home' },
-  { id: 'history', label: 'Giao dich', icon: 'list', route: 'Transaction' },
-  { id: 'stats', label: 'Thong ke', icon: 'bar-chart', route: 'Stats' },
-  { id: 'wallet', label: 'Ngan sach', icon: 'wallet', route: 'Budget' },
-  { id: 'profile', label: 'Ca nhan', icon: 'person', route: 'Profile' },
+  { id: 'home', label: 'Trang chủ', icon: 'home', route: 'Home' },
+  { id: 'history', label: 'Giao dịch', icon: 'list', route: 'Transaction' },
+  { id: 'stats', label: 'Thống kê', icon: 'bar-chart', route: 'Stats' },
+  { id: 'wallet', label: 'Ngân sách', icon: 'wallet', route: 'Budget' },
+  { id: 'profile', label: 'Cá nhân', icon: 'person', route: 'Profile' },
 ];
 
 export default function AppBottomNav({ navigation, activeTab, position = 'inline' }) {

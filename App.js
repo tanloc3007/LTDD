@@ -11,7 +11,6 @@ import HomeScreen from './screens/HomeScreen';
 import TransactionScreen from './screens/TransactionScreen';
 import StatsScreen from './screens/StatsScreen';
 import BudgetScreen from './screens/BudgetScreen';
-import LimitScreen from './screens/LimitScreen';
 import AIChatScreen from './screens/AIChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import CreateBudgetScreen from './screens/CreateBudgetScreen.js';
@@ -107,7 +106,6 @@ function AppNavigation() {
         <Stack.Screen name="Transaction" component={TransactionScreen} />
         <Stack.Screen name="Stats" component={StatsScreen} />
         <Stack.Screen name="Budget" component={BudgetScreen} />
-        <Stack.Screen name="Limit" component={LimitScreen} />
         <Stack.Screen name="AIChat" component={AIChatScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="CreateBudget" component={CreateBudgetScreen} />

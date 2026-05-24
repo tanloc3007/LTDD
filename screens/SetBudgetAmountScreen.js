@@ -28,7 +28,7 @@ function currentMonthKey() {
 export default function SetBudgetAmountScreen({ navigation, route }) {
   const { category, initialAmount } = route.params;
   const { token } = useAuth();
-  const { colors: COLORS, formatCurrency } = useSettings();
+  const { colors: COLORS, formatCurrency, currency } = useSettings();
   const s = useMemo(() => getStyles(COLORS), [COLORS]);
 
   const [amount, setAmount] = useState(initialAmount || '0');
@@ -41,11 +41,14 @@ export default function SetBudgetAmountScreen({ navigation, route }) {
 
   const handleSave = async () => {
     if (!token) return;
-    const amt = Number(amount);
-    if (amt <= 0) {
+    const rawNum = Number(amount);
+    if (rawNum <= 0) {
         Alert.alert('Thông báo', 'Vui lòng nhập số tiền ngân sách.');
         return;
     }
+
+    // Convert USD input to VND base unit before saving
+    const amt = Math.round(currency === 'USD' ? rawNum * 25000 : rawNum);
 
     setLoading(true);
     try {
@@ -117,12 +120,12 @@ export default function SetBudgetAmountScreen({ navigation, route }) {
             </View>
 
             <View style={s.inputBox}>
-                <Text style={s.inputLabel}>Ngân sách chi tiêu trong tháng*</Text>
+                <Text style={s.inputLabel}>Ngân sách chi tiêu trong tháng* ({currency === 'USD' ? '$' : 'đ'})</Text>
                 <View style={s.inputWrapper}>
                     <TextInput
                         style={s.input}
                         keyboardType="numeric"
-                        value={Number(amount).toLocaleString('vi-VN') + 'đ'}
+                        value={currency === 'USD' ? `$${amount}` : `${Number(amount).toLocaleString('vi-VN')}đ`}
                         onChangeText={handleAmountChange}
                         onFocus={() => { if(amount === '0') setAmount('') }}
                     />
@@ -138,7 +141,7 @@ export default function SetBudgetAmountScreen({ navigation, route }) {
 
         <View style={s.chartCard}>
             <View style={s.chartHeader}>
-                <View style={s.amountBadge}><Text style={s.amountBadgeText}>0đ</Text></View>
+                <View style={s.amountBadge}><Text style={s.amountBadgeText}>{currency === 'USD' ? '$0' : '0đ'}</Text></View>
             </View>
             
             <LineChart

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,33 +14,54 @@ export default function HomeScreen({ navigation, route }) {
   const { transactions, loading } = useFinance();
   const { token, user } = useAuth();
   const userName = user?.name || route?.params?.userName || '';
+  const avatarUri = user?.avatar;
   const { colors: COLORS, formatCurrency } = useSettings();
   const styles = useMemo(() => getStyles(COLORS), [COLORS]);
 
   const QUICK_ACTIONS = [
-    { id: '1', label: 'Them', icon: 'add-circle', color: COLORS.primary },
-    { id: '2', label: 'Thong ke', icon: 'bar-chart', color: '#8B5CF6' },
-    { id: '3', label: 'Ngan sach', icon: 'wallet', color: '#F59E0B' },
-    { id: '4', label: 'Han muc', icon: 'speedometer', color: '#EF4444' },
-    { id: '5', label: 'AI Chat', icon: 'chatbubbles', color: '#06B6D4' },
+    { id: '1', label: 'Thêm', icon: 'add-circle', color: COLORS.primary },
+    { id: '2', label: 'Thống kê', icon: 'bar-chart', color: '#8B5CF6' },
+    { id: '3', label: 'Ngân sách', icon: 'wallet', color: '#F59E0B' },
+    { id: '5', label: 'Trợ lý AI', icon: 'chatbubbles', color: '#06B6D4' },
   ];
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
   const [hideBalance, setHideBalance] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [healthData, setHealthData] = useState({ score: 100, diagnosis: '' });
+  const [loadingHealth, setLoadingHealth] = useState(true);
+  const [showHealthModal, setShowHealthModal] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
       if (!token) return;
       let mounted = true;
+
+      // Fetch notifications
       apiRequest('/notifications', { headers: authHeaders })
         .then((res) => {
           if (mounted) setNotifications(res.notifications || []);
         })
         .catch(() => { });
+
+      // Fetch health check
+      setLoadingHealth(true);
+      apiRequest('/ai-health-check', { method: 'POST', headers: authHeaders })
+        .then((res) => {
+          if (mounted && res) {
+            setHealthData({ score: res.score, diagnosis: res.diagnosis });
+          }
+        })
+        .catch((err) => {
+          console.error('AI Health Check Fetch Error:', err);
+        })
+        .finally(() => {
+          if (mounted) setLoadingHealth(false);
+        });
+
       return () => { mounted = false; };
-    }, [token])
+    }, [token, transactions])
   );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -90,12 +111,12 @@ export default function HomeScreen({ navigation, route }) {
 
     const entries = Object.entries(expenseTotals);
     if (!entries.length || summary.totalExpense <= 0) {
-      return 'Them giao dich de xem goi y chi tieu ca nhan.';
+      return 'Thêm giao dịch để xem gợi ý chi tiêu cá nhân.';
     }
 
     const [topCategoryId, amount] = entries.sort((a, b) => b[1] - a[1])[0];
     const percent = Math.round((amount / summary.totalExpense) * 100);
-    return `Danh muc ${getCategory(topCategoryId).label} dang chiem ${percent}% tong chi. Ban co the xem lai muc nay de toi uu ngan sach.`;
+    return `Danh mục ${getCategory(topCategoryId).label} đang chiếm ${percent}% tổng chi. Bạn có thể xem lại mục này để tối ưu ngân sách.`;
   }, [summary.totalExpense, transactions]);
 
   const handleQuickAction = (action) => {
@@ -105,12 +126,11 @@ export default function HomeScreen({ navigation, route }) {
       navigation.navigate('Stats');
     } else if (action.id === '3') {
       navigation.navigate('Budget');
-    } else if (action.id === '4') {
-      navigation.navigate('Limit');
+
     } else if (action.id === '5') {
       navigation.navigate('AIChat');
     } else {
-      Alert.alert(action.label, 'Tinh nang dang phat trien!');
+      Alert.alert(action.label, 'Tính năng đang phát triển!');
     }
   };
 
@@ -120,11 +140,15 @@ export default function HomeScreen({ navigation, route }) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.avatarBox}>
-              <Ionicons name="person" size={20} color="#FFFFFF" />
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={20} color="#FFFFFF" />
+              )}
             </View>
             <View>
-              <Text style={styles.greetText}>Xin chao,</Text>
-              <Text style={styles.userName}>{userName || 'Nguoi dung'}</Text>
+              <Text style={styles.greetText}>Xin chào,</Text>
+              <Text style={styles.userName}>{userName || 'Người dùng'}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.notifBtn} onPress={() => setShowNotifModal(true)}>
@@ -139,7 +163,7 @@ export default function HomeScreen({ navigation, route }) {
 
         <View style={styles.balanceCard}>
           <View style={styles.balanceTop}>
-            <Text style={styles.balanceLabel}>Tong so du</Text>
+            <Text style={styles.balanceLabel}>Tổng số dư</Text>
             <TouchableOpacity onPress={() => setHideBalance(!hideBalance)}>
               <Ionicons
                 name={hideBalance ? 'eye-off-outline' : 'eye-outline'}
@@ -157,7 +181,7 @@ export default function HomeScreen({ navigation, route }) {
             <View style={styles.statItem}>
               <Ionicons name="arrow-down-circle" size={16} color="#A7F3D0" />
               <View>
-                <Text style={styles.statLabel}>Thu nhap</Text>
+                <Text style={styles.statLabel}>Thu nhập</Text>
                 <Text style={[styles.statAmount, { color: '#A7F3D0' }]}>
                   +{formatCurrency(summary.totalIncome)}
                 </Text>
@@ -167,7 +191,7 @@ export default function HomeScreen({ navigation, route }) {
             <View style={styles.statItem}>
               <Ionicons name="arrow-up-circle" size={16} color="#FCA5A5" />
               <View>
-                <Text style={styles.statLabel}>Chi tieu</Text>
+                <Text style={styles.statLabel}>Chi tiêu</Text>
                 <Text style={[styles.statAmount, { color: '#FCA5A5' }]}>
                   -{formatCurrency(summary.totalExpense)}
                 </Text>
@@ -194,6 +218,36 @@ export default function HomeScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* HEALTH SCORE CARD */}
+        <View style={styles.section}>
+          <TouchableOpacity 
+            style={styles.healthCard} 
+            activeOpacity={0.8}
+            onPress={() => setShowHealthModal(true)}
+          >
+            <View style={styles.healthLeft}>
+              <View style={[styles.healthCircle, { borderColor: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger }]}>
+                <Text style={[styles.healthScoreVal, { color: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger }]}>
+                  {loadingHealth ? '...' : healthData.score}
+                </Text>
+                <Text style={styles.healthScoreMax}>/100</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.healthTitle}>Sức khỏe tài chính</Text>
+                <Text style={styles.healthStatus}>
+                  Trạng thái: <Text style={[styles.healthStatusText, { color: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger }]}>
+                    {healthData.score >= 80 ? 'Rất tốt' : healthData.score >= 50 ? 'Trung bình' : 'Cần cải thiện'}
+                  </Text>
+                </Text>
+              </View>
+            </View>
+            <View style={styles.healthRight}>
+              <Text style={styles.diagnosticLink}>Chẩn đoán AI</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.section}>
           <View style={styles.tipCard}>
             <View style={styles.tipLeft}>
@@ -201,7 +255,7 @@ export default function HomeScreen({ navigation, route }) {
                 <Ionicons name="bulb" size={22} color={COLORS.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.tipTitle}>Goi y tu AI</Text>
+                <Text style={styles.tipTitle}>Gợi ý từ AI</Text>
                 <Text style={styles.tipBody}>{topExpenseTip}</Text>
               </View>
             </View>
@@ -210,21 +264,21 @@ export default function HomeScreen({ navigation, route }) {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Giao dich gan day</Text>
+            <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Transaction')}>
-              <Text style={styles.seeAll}>Xem tat ca</Text>
+              <Text style={styles.seeAll}>Xem tất cả</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.transactionList}>
             {loading ? (
-              <Text style={styles.emptyState}>Dang tai du lieu...</Text>
+              <Text style={styles.emptyState}>Đang tải dữ liệu...</Text>
             ) : recentTransactions.length ? (
               recentTransactions.map((item) => (
                 <TransactionItem key={item.id} item={item} COLORS={COLORS} formatCurrency={formatCurrency} styles={styles} />
               ))
             ) : (
-              <Text style={styles.emptyState}>Chua co giao dich nao.</Text>
+              <Text style={styles.emptyState}>Chưa có giao dịch nào.</Text>
             )}
           </View>
         </View>
@@ -233,6 +287,51 @@ export default function HomeScreen({ navigation, route }) {
       </ScrollView>
 
       <AppBottomNav navigation={navigation} activeTab="home" />
+
+      {/* ═══════════ HEALTH DIAGNOSIS MODAL ═══════════ */}
+      <Modal visible={showHealthModal} animationType="slide" transparent onRequestClose={() => setShowHealthModal(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.sheetLg, { maxHeight: '90%' }]}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Chẩn đoán Tài chính AI</Text>
+              <TouchableOpacity onPress={() => setShowHealthModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              <View style={styles.diagScoreContainer}>
+                <View style={[styles.diagCircle, { borderColor: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger }]}>
+                  <Text style={[styles.diagScoreText, { color: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger }]}>
+                    {healthData.score}
+                  </Text>
+                  <Text style={styles.diagScoreMax}>/ 100 điểm</Text>
+                </View>
+                <Text style={styles.diagRating}>
+                  Đánh giá: <Text style={{ color: healthData.score >= 80 ? COLORS.success : healthData.score >= 50 ? COLORS.warning : COLORS.danger, fontWeight: FONTS.bold }}>
+                    {healthData.score >= 80 ? 'Bền vững' : healthData.score >= 50 ? 'Cảnh báo nhẹ' : 'Mất cân đối'}
+                  </Text>
+                </Text>
+              </View>
+
+              <View style={styles.diagReportBox}>
+                <View style={styles.diagReportHeader}>
+                  <Ionicons name="medkit-outline" size={20} color={COLORS.primary} />
+                  <Text style={styles.diagReportTitle}>Chi tiết chẩn đoán từ AI</Text>
+                </View>
+                <Text style={styles.diagReportBody}>
+                  {loadingHealth ? 'AI đang tổng hợp và phân tích dữ liệu...' : healthData.diagnosis || 'Không có dữ liệu chẩn đoán.'}
+                </Text>
+              </View>
+
+              <TouchableOpacity style={styles.diagActionBtn} onPress={() => { setShowHealthModal(false); navigation.navigate('AIChat'); }}>
+                <Ionicons name="chatbubbles-outline" size={20} color="#FFF" />
+                <Text style={styles.diagActionText}>Hỏi ý kiến Trợ lý AI</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showNotifModal} animationType="slide" transparent onRequestClose={() => setShowNotifModal(false)}>
         <View style={styles.overlay}>
@@ -311,6 +410,68 @@ function TransactionItem({ item, COLORS, formatCurrency, styles }) {
 
 const getStyles = (COLORS) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.bg },
+  healthCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.sm,
+  },
+  healthLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  healthCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthScoreVal: { fontSize: SIZES.md, fontWeight: FONTS.bold },
+  healthScoreMax: { fontSize: 8, color: COLORS.gray, marginTop: -2 },
+  healthTitle: { fontSize: SIZES.sm, fontWeight: FONTS.bold, color: COLORS.dark },
+  healthStatus: { fontSize: SIZES.xs, color: COLORS.gray, marginTop: 2 },
+  healthStatusText: { fontWeight: FONTS.bold },
+  healthRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  diagnosticLink: { fontSize: SIZES.xs, color: COLORS.primary, fontWeight: FONTS.semiBold },
+
+  // Diagnosis Modal
+  diagScoreContainer: { alignItems: 'center', marginVertical: 20 },
+  diagCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  diagScoreText: { fontSize: SIZES.xxl, fontWeight: FONTS.extraBold },
+  diagScoreMax: { fontSize: SIZES.xs, color: COLORS.gray },
+  diagRating: { fontSize: SIZES.base, color: COLORS.dark },
+  diagReportBox: {
+    backgroundColor: `${COLORS.primary}05`,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}15`,
+    marginBottom: 20,
+  },
+  diagReportHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  diagReportTitle: { fontSize: SIZES.base, fontWeight: FONTS.bold, color: COLORS.dark },
+  diagReportBody: { fontSize: SIZES.sm, color: COLORS.dark, lineHeight: 22 },
+  diagActionBtn: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    ...SHADOWS.md,
+  },
+  diagActionText: { color: '#FFF', fontSize: SIZES.base, fontWeight: FONTS.bold },
   scroll: { flexGrow: 1, paddingBottom: 8 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -322,7 +483,9 @@ const getStyles = (COLORS) => StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: COLORS.primary,
     alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  avatarImage: { width: '100%', height: '100%' },
   greetText: { fontSize: SIZES.xs, color: COLORS.gray, fontWeight: FONTS.regular },
   userName: { fontSize: SIZES.base, color: COLORS.dark, fontWeight: FONTS.bold },
   notifBtn: { position: 'relative', padding: 4 },
