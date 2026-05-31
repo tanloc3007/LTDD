@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+const DEFAULT_API_BASE_URL = 'https://quan-ly-chi-tieu-guja.onrender.com';
+
 function extractHostFromExpo() {
   const candidates = [
     Constants.expoConfig?.hostUri,
@@ -21,7 +23,7 @@ function buildCandidates() {
   const expoHost = extractHostFromExpo();
   const candidates = [];
 
-  if (manual) candidates.push(manual);
+  candidates.push(manual || DEFAULT_API_BASE_URL);
 
   if (Platform.OS === 'android') {
     candidates.push('http://10.0.2.2:3001');

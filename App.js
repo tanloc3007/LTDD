@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React from 'react';
-import { Easing } from 'react-native';
+import { ActivityIndicator, Easing, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
@@ -16,7 +16,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import CreateBudgetScreen from './screens/CreateBudgetScreen.js';
 import SetBudgetAmountScreen from './screens/SetBudgetAmountScreen.js';
 import AddCategoryScreen from './screens/AddCategoryScreen.js';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { FinanceProvider } from './contexts/FinanceContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 
@@ -83,12 +83,22 @@ const createCardStyleInterpolator = (route) => ({ current, layouts }) => {
 
 function AppNavigation() {
   const { theme, colors } = useSettings();
+  const { token, authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
       <Stack.Navigator
-        initialRouteName="Login"
+        key={token ? 'app' : 'auth'}
+        initialRouteName={token ? 'Home' : 'Login'}
         screenOptions={({ route }) => ({
           headerShown: false,
           gestureEnabled: true,

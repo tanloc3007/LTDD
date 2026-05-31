@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Dimensions,
@@ -24,6 +25,7 @@ import AppBottomNav from '../components/AppBottomNav';
 
 const screenWidth = Dimensions.get('window').width;
 const chartWidth = Math.min(screenWidth - 48, 340);
+const GROUP_STATS_STORAGE_KEY = 'financial-management/group-stats';
 
 const GROUP_CATEGORY_OPTIONS = [
   { id: 'food', label: 'Ăn uống', icon: 'restaurant', color: '#E91E8C' },
@@ -85,6 +87,32 @@ export default function StatsScreen({ navigation }) {
   const [selectedGroupCategoryId, setSelectedGroupCategoryId] = useState('food');
   const [groupCategoryAmountInput, setGroupCategoryAmountInput] = useState('');
 
+  useEffect(() => {
+    let mounted = true;
+
+    AsyncStorage.getItem(GROUP_STATS_STORAGE_KEY)
+      .then((saved) => {
+        if (!mounted || !saved) return;
+        const data = JSON.parse(saved);
+        setGroupTotalAmount(Number(data.groupTotalAmount || 0));
+        setGroupTotalInput(String(Number(data.groupTotalAmount || 0)));
+        setGroupMembers(Array.isArray(data.groupMembers) ? data.groupMembers : []);
+        setGroupCategoryItems(Array.isArray(data.groupCategoryItems) ? data.groupCategoryItems : []);
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(
+      GROUP_STATS_STORAGE_KEY,
+      JSON.stringify({ groupTotalAmount, groupMembers, groupCategoryItems })
+    ).catch(() => {});
+  }, [groupTotalAmount, groupMembers, groupCategoryItems]);
+
   const currentDate = new Date();
   const decoratedTransactions = useMemo(
     () => transactions.map((item) => ({ ...item, parsedDate: parseTransactionDate(item.date) })),
@@ -142,6 +170,10 @@ export default function StatsScreen({ navigation }) {
   const perPersonAmount = groupMembers.length ? Math.round(groupTotalAmount / groupMembers.length) : 0;
 
   useEffect(() => {
+    if (!groupCategoryItems.length) {
+      return;
+    }
+
     const total = groupCategoryItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     setGroupTotalAmount(total);
     if (!editingGroupTotal) {

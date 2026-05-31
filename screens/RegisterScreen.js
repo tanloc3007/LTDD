@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { FONTS, SIZES, SHADOWS } from '../constants/theme';
+import { GOOGLE_WEB_CLIENT_ID, getGoogleDeveloperErrorMessage } from '../constants/googleAuth';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -75,7 +76,7 @@ export default function RegisterScreen({ navigation }) {
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: '769715173800-apeqnirv8pi0c26j709o0d973tim15on.apps.googleusercontent.com',
+      webClientId: GOOGLE_WEB_CLIENT_ID,
       offlineAccess: true,
     });
   }, []);
@@ -128,6 +129,8 @@ export default function RegisterScreen({ navigation }) {
       }
       if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         Alert.alert('Lỗi', 'Google Play Services không khả dụng.');
+      } else if (String(error.message || '').includes('DEVELOPER_ERROR')) {
+        Alert.alert('Lỗi cấu hình Google', getGoogleDeveloperErrorMessage());
       } else {
         Alert.alert('Lỗi', error.message || 'Không thể đăng nhập bằng Google.');
       }
