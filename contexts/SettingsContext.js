@@ -1,12 +1,45 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { accentOptions, buildThemeColors } from '../constants/theme';
 
 const SettingsContext = createContext(null);
+const SETTINGS_STORAGE_KEY = 'financial-management/settings';
 
 export function SettingsProvider({ children }) {
   const [theme, setTheme] = useState('light'); // 'light' or 'dark'
   const [currency, setCurrency] = useState('VND'); // 'VND' or 'USD'
   const [accent, setAccent] = useState('pink');
+
+  useEffect(() => {
+    let mounted = true;
+
+    AsyncStorage.getItem(SETTINGS_STORAGE_KEY)
+      .then((saved) => {
+        if (!mounted || !saved) return;
+        const settings = JSON.parse(saved);
+        if (settings.theme === 'light' || settings.theme === 'dark') {
+          setTheme(settings.theme);
+        }
+        if (settings.currency === 'VND' || settings.currency === 'USD') {
+          setCurrency(settings.currency);
+        }
+        if (accentOptions.some((option) => option.key === settings.accent)) {
+          setAccent(settings.accent);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ theme, currency, accent })
+    ).catch(() => {});
+  }, [theme, currency, accent]);
 
   const colors = buildThemeColors(theme, accent);
 

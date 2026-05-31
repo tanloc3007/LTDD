@@ -26,7 +26,7 @@ export default function HomeScreen({ navigation, route }) {
   ];
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-  const [hideBalance, setHideBalance] = useState(false);
+  const [hideBalance, setHideBalance] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [healthData, setHealthData] = useState({ score: 100, diagnosis: '' });
